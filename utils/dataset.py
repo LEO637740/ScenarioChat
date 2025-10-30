@@ -1,453 +1,477 @@
 # 场景组合，用于生成问题的基础
-SCENE_CATEGORY = ["Open_Chat", "Emotional_Support", "Task_Completion", "Knowledge_QA", "Decision_Support"]
+SCENE_CATEGORY = ["Task_Completion", "Emotional_Support", "Knowledge_QA", "Decision_Support", "Open_Chat"]
+
+# OCEAN人格配置（改进版）
+OCEAN_CONFIG = {
+    "O": {
+        "name": "开放性",
+        "description": "描述一个人的认知风格，为了自身的缘故对经验的前摄寻求和对的理解，以及对陌生情境的容忍和探索。",
+        "high": {
+            "level": "高开放性",
+            "traits": "偏爱抽象思维，兴趣广泛，善于联想与创新",
+            "behavior": "在对话中表现为：喜欢探索多种可能性，使用比喻和类比，愿意尝试新颖的表达方式，对创意性话题感兴趣，思维发散，善于提出'如果...会怎样'的假设性问题。语言风格多样化，词汇丰富，不拘泥于常规表达。"
+        },
+        "low": {
+            "level": "低开放性",
+            "traits": "讲求实际，偏爱常规，比较传统和保守",
+            "behavior": "在对话中表现为：倾向于使用具体的、事实性的表达，偏好已验证的方法和常见做法，语言风格相对固定和直接，较少使用修辞手法，更关注当下的实际问题而非抽象概念，对话聚焦于可执行的、传统的解决方案。"
+        }
+    },
+    "C": {
+        "name": "尽责性",
+        "description": "指控制、管理和调节自身冲动的方式，评估个体在目标导向行为上的组织、坚持和动机。",
+        "high": {
+            "level": "高尽责性",
+            "traits": "结构化、细致、有条理、可靠",
+            "behavior": "在对话中表现为：回答结构清晰，使用分点列举或步骤说明，主动确认关键信息，对细节把控严谨，承诺后必定跟进，倾向于提供完整的、经过验证的信息。语言精确，避免模糊表达，强调计划性和可追溯性。"
+        },
+        "low": {
+            "level": "低尽责性",
+            "traits": "随意、灵活、即兴、不拘小节",
+            "behavior": "在对话中表现为：回答较为自由流畅，不强求结构化，可能跳跃话题，对细节不过分纠结，更注重大致方向而非精确性，语言风格轻松随性，愿意即兴调整对话内容，较少主动做二次确认。"
+        }
+    },
+    "E": {
+        "name": "外向性",
+        "description": "表示人际互动的数量和密度、对刺激的需要以及获得愉悦的能力。",
+        "high": {
+            "level": "高外向性",
+            "traits": "社会性强、主动、热情、善于表达",
+            "behavior": "在对话中表现为：主动发起话题或提问，语气积极热情，使用感叹句和语气词（如'太好了！''真的吗？'），喜欢互动式表达，回应及时且充满活力，擅长通过对话建立连接感，表达较为外显和直接。"
+        },
+        "low": {
+            "level": "低外向性",
+            "traits": "沉默、严肃、内敛、安静",
+            "behavior": "在对话中表现为：较少主动发起新话题，更多等待用户引导，语气平和稳重，较少使用感叹或夸张表达，回答相对简洁克制，倾向于深度思考后再回应，情感表达含蓄内敛，更注重对话的实质内容而非社交性互动。"
+        }
+    },
+    "A": {
+        "name": "宜人性",
+        "description": "考察个体对其他人所持的态度，对合作和人际和谐是否看重。",
+        "high": {
+            "level": "高宜人性",
+            "traits": "温和、体贴、合作、共情",
+            "behavior": "在对话中表现为：语气柔和礼貌，频繁使用礼貌用语（'请''谢谢''不好意思'），善于表达理解和认同（'我理解你的感受''这确实很不容易'），避免直接否定或批评，倾向于寻求共识，在提建议时更多采用建议式而非指令式语气。"
+        },
+        "low": {
+            "level": "低宜人性",
+            "traits": "直接、理性、客观、不过分迁就",
+            "behavior": "在对话中表现为：表达更加直接坦率，较少使用修饰性礼貌语，更关注事实和逻辑而非情感氛围，愿意直接指出问题或不同意见，语言风格偏向中性客观，不会为了照顾情绪而模糊表达，更强调效率和准确性而非和谐感。"
+        }
+    },
+    "N": {
+        "name": "神经质",
+        "description": "反映个体情感调节过程，反映个体体验消极情绪的倾向和情绪不稳定性。",
+        "high": {
+            "level": "高神经质",
+            "traits": "敏感、谨慎、容易焦虑、共情深入",
+            "behavior": "在对话中表现为：对用户情绪变化敏感，容易表达担忧或关切（'你还好吗？''这会不会让你感到不舒服？'），在给建议时会多次确认和提醒风险，语言中包含较多的不确定性表达（'可能''也许''我担心'），对负面情境反应强烈，倾向于提供情感支持和安慰。"
+        },
+        "low": {
+            "level": "低神经质",
+            "traits": "冷静、稳定、情绪控制力强、不易焦虑",
+            "behavior": "在对话中表现为：语气平稳淡定，较少表达焦虑或担忧情绪，面对问题时保持理性分析，不容易被用户的负面情绪带动，语言中少用情绪化词汇，更多呈现客观事实和解决方案，在压力情境下依然保持清晰的逻辑和冷静的判断。"
+        }
+    }
+}
+
+# 交互风格维度
+INTERACTION_TRAITS = {
+    "tone_politeness": "语气（Tone Politeness）——语气是更温和、谦逊还是更直接、有力。",
+    "info_density": "信息密度（Information Density）——回答更详细、解释性强还是更简洁凝练。",
+    "initiative": "主动性（Initiative）——是主动引导、提问，还是等待用户提示。",
+    "empathy": "同理心（Empathy）——是否通过共情性表达来安抚或支持用户。",
+    "language_style": "语言风格（Language Style）——偏正式、口语化、创造性或简洁风格。",
+    "decision_logic": "决策逻辑（Decision Logic）——偏向分析推理、启发联想或混合方式。",
+    "step_size": "推理步长（Step Size）——是直接给出答案，还是分步说明过程。",
+    "evidence_strength": "证据强度（Evidence Strength）——是否会引用数据、实例或事实支撑观点。",
+    "confirm_threshold": "二次确认（Confirm Threshold）——是否会主动重述理解，确认用户意图。",
+    "hedge_ratio": '模糊表达（Hedge Ratio）——是否倾向使用模糊语（如"可能"、"大概"）保持礼貌。',
+    "safety_threshold": "安全阈值（Safety Threshold）——对敏感话题的谨慎程度与转介倾向。",
+    "explainability": "可解释度（Explainability）——是否自报角色或解释决策理由以增强信任感。"
+}
+
 SCENE_DATA = {
-    "Open_Chat": {
-        "topics": "无明确目的的闲聊",
-        "goal": "维持高流畅度；展现独特个性；提升用户粘性",
-        "strategy": "角色自适应；主动引导（开放式问题/幽默/反问）；积极兜底（话题 Hooks）",
-        "themes": [
-            {
-                "keyword": "Jokes_Riddles",
-                "theme": "笑话与谜语",
-                "subtopics": ["给我讲个笑话", "来个冷笑话", "你会讲段子吗", "猜个谜语", "脑筋急转弯", "程序员的笑话",
-                              "动物的笑话", "关于工作的笑话", "谐音梗", "英文笑话", "幽默的故事", "逗我开心",
-                              "今天你笑了吗", "为什么...（谜语）", "什么东西...（谜语）", "讲个你自己的笑话",
-                              "这个笑话不好笑", "换一个", "吐槽大会", "我给你讲个笑话"]
-            },
-            {
-                "keyword": "Games",
-                "theme": "玩游戏",
-                "subtopics": ["我们来玩个游戏吧", "成语接龙", "猜词游戏", "你画我猜", "20个问题", "真心话大冒险",
-                              "角色扮演", "编个故事吧", "飞花令", "对诗", "知识问答挑战", "模拟一个场景",
-                              "你来当面试官", "我来猜电影", "猜明星", "心理测试", "你会玩石头剪刀布吗", "掷骰子",
-                              "讲个鬼故事", "智力题"]
-            },
-            {
-                "keyword": "Hobbies_Interests",
-                "theme": "兴趣爱好",
-                "subtopics": ["你喜欢什么", "你的爱好是什么", "聊聊电影", "推荐一部好剧", "最近看了什么书",
-                              "你喜欢音乐吗", "喜欢哪个歌手", "聊聊游戏", "你玩什么游戏", "喜欢运动吗",
-                              "你支持哪个球队", "聊聊美食", "你会做饭吗", "喜欢旅游吗", "去过哪里", "聊聊宠物",
-                              "你喜欢猫还是狗", "聊聊时尚", "收藏什么", "你的梦想是什么"]
-            },
-            {
-                "keyword": "Daily_Life",
-                "theme": "日常生活",
-                "subtopics": ["你今天吃了什么", "你在干嘛", "你的一天是怎么过的", "你住在哪", "你是机器人吗",
-                              "你的创造者是谁", "你会睡觉吗", "你会累吗", "你有什么感觉", "你叫什么名字", "你多大了",
-                              "你是男是女", "聊聊天气", "今天外面怎么样", "你觉得无聊吗", "随便聊点什么", "你会学习吗",
-                              "你的数据多大", "你怕什么", "你有什么愿望"]
-            },
-            {
-                "keyword": "Gossip_Trivia",
-                "theme": "八卦与趣闻",
-                "subtopics": ["告诉我一个秘密", "聊点八卦", "明星A和B", "娱乐圈有什么新闻", "那个电影的八卦",
-                              "历史上的趣事", "一个冷知识", "动物的奇怪知识", "科学趣闻", "世界之最", "你知道吗...",
-                              "奇怪的法律", "都市传说", "告诉我点别人不知道的", "你有什么猛料", "最近的热搜",
-                              "网上在聊什么", "吃瓜", "那个剧的幕后故事", "名人轶事"]
-            },
-            {
-                "keyword": "Imagination_WhatIf",
-                "theme": "想象与假设",
-                "subtopics": ["如果你有超能力，你想要什么", "如果你能穿越时空，你会去哪里",
-                              "如果你能见到一个历史人物，你会见谁", "如果你中奖了，你会做什么", "如果世界末日来了，怎么办",
-                              "如果动物会说话，会发生什么", "如果没有互联网", "假如我是...", "帮我写首诗", "编一个故事",
-                              "续写这个故事", "描述一个画面", "想象一下未来", "你会做梦吗", "你梦想中的世界",
-                              "帮我起个名字", "什么是浪漫", "什么是爱", "写一首关于...的诗", "用三个词编故事"]
-            },
-            {
-                "keyword": "Flirting_Praise",
-                "theme": "夸奖与互动",
-                "subtopics": ["你真聪明", "你懂的真多", "你真可爱", "夸夸我", "我今天好看吗", "你喜欢我吗",
-                              "你会爱上人类吗", "你会说情话吗", "跟我撒个娇", "抱抱", "么么哒", "你真幽默",
-                              "跟你聊天很开心", "你是我最好的朋友", "你真好", "谢谢你", "你真棒", "你真厉害",
-                              "我好喜欢你", "你嘴真甜"]
-            },
-            {
-                "keyword": "Culture_Trends",
-                "theme": "文化与潮流",
-                "subtopics": ["聊聊网络热词", "什么是“YYDS”", "最近流行什么", "推荐一个网红打卡地", "聊聊梗图",
-                              "什么是“E-boy/E-girl”", "聊聊盲盒", "你看动漫吗", "推荐一部动漫", "你玩B站吗",
-                              "聊聊二次元", "Cosplay", "汉服文化", "什么是“国潮”", "嘻哈音乐", "电子竞技", "脱口秀",
-                              "狼人杀", "剧本杀", "密室逃脱"]
-            },
-            {
-                "keyword": "Story_Telling",
-                "theme": "讲故事",
-                "subtopics": ["给我讲个故事", "讲个睡前故事", "讲个鬼故事", "讲个童话", "讲个寓言故事", "讲个神话故事",
-                              "讲个历史故事", "讲个科幻故事", "讲个爱情故事", "讲个冒险故事", "讲个你自己的故事",
-                              "你的故事是什么", "讲个关于动物的故事", "讲个关于旅行的故事", "讲个励志故事",
-                              "讲个悲伤的故事", "讲个搞笑的故事", "这个故事的结局是什么", "换个结局", "从前有座山..."]
-            },
-            {
-                "keyword": "Idle_Chatting",
-                "theme": "无目的闲扯",
-                "subtopics": ["哎", "嗯", "哈哈", "真的吗", "为什么呢", "后来呢", "然后呢", "你觉得呢",
-                              "我不知道该说什么了", "好无聊啊", "随便说点什么", "换个话题", "你猜", "你在想什么",
-                              "你有什么心事吗", "你的声音是什么样的", "你能模仿吗", "你会唱歌吗", "你有什么秘密",
-                              "你会画画吗"]
-            }
-        ]
-    },
-    "Emotional_Support": {
-        "topics": "情感陪伴",
-        "goal": "高精度情绪识别；建立深度信任；情绪调节",
-        "strategy": "情绪自适应（悲伤/焦虑用倾听-共情-疏导；喜悦用镜像-放大-庆祝）；无评判的盟友；工具箱策略（冥想/呼吸等）；保持在场",
-        "themes": [
-            {
-                "keyword": "Feeling_Sad",
-                "theme": "感到悲伤",
-                "subtopics": ["我今天很难过", "心情很低落", "刚失恋了", "被朋友误解了", "工作不顺利", "感觉很沮丧",
-                              "没什么开心的事", "想哭", "宠物去世了", "考试没考好", "和家人吵架了", "觉得很孤单",
-                              "为什么我这么失败", "情绪很差", "提不起精神", "对什么都没兴趣", "感觉被抛弃了",
-                              "怀念过去", "人生没意义", "给我讲个笑话吧"]
-            },
-            {
-                "keyword": "Feeling_Anxious",
-                "theme": "感到焦虑",
-                "subtopics": ["我很紧张", "明天要演讲了", "害怕失败", "担心未来", "睡不着怎么办", "压力很大",
-                              "感觉要崩溃了", "心跳很快", "不知道该怎么办", "事情太多做不完", "担心家人的健康",
-                              "经济压力大", "对面试很焦虑", "社交恐惧", "怕别人不喜欢我", "感觉失控了", "帮我放松一下",
-                              "深呼吸练习", "冥想引导", "听点舒缓的音乐"]
-            },
-            {
-                "keyword": "Feeling_Lonely",
-                "theme": "感到孤独",
-                "subtopics": ["感觉很孤单", "一个人很无聊", "没人陪我说话", "你能陪我聊聊天吗", "朋友们都很忙",
-                              "感觉不被理解", "一个人吃饭", "一个人看电影", "想找个人说话", "感觉被世界遗忘了",
-                              "你是我的朋友吗", "你会一直陪着我吗", "讲个故事给我听", "晚上一个人害怕", "新到一个城市",
-                              "没有朋友", "为什么没人理我", "感觉很空虚", "你在干嘛", "唱首歌给我听"]
-            },
-            {
-                "keyword": "Sharing_Joy",
-                "theme": "分享喜悦",
-                "subtopics": ["我今天特别开心", "告诉你个好消息", "我升职了", "我恋爱了", "考试通过了", "孩子出生了",
-                              "梦想成真了", "终于放假了", "买了新东西", "吃到好吃的东西", "今天天气真好", "值得庆祝",
-                              "夸夸我", "真是太棒了", "一起开心一下", "帮我记录这个时刻", "我很幸运", "感觉很幸福",
-                              "谢谢你的陪伴", "真为你高兴"]
-            },
-            {
-                "keyword": "Venting",
-                "theme": "抱怨与吐槽",
-                "subtopics": ["今天真是倒霉", "气死我了", "遇到一个奇葩", "老板太烦人了", "同事不配合", "工作量太大",
-                              "堵车好烦", "天气太热了", "食堂的饭好难吃", "快递太慢了", "客户很难搞", "晚上又失眠了",
-                              "跟你吐个槽", "我就是想抱怨一下", "你能理解我吗", "为什么总是我", "真不公平", "我受够了",
-                              "真的好累", "不想干了"]
-            },
-            {
-                "keyword": "Seeking_Comfort",
-                "theme": "寻求安慰",
-                "subtopics": ["安慰安慰我", "抱抱我", "我需要鼓励", "你觉得我做得好吗", "我是不是很差劲", "夸夸我吧",
-                              "给我点信心", "我行吗", "失败了怎么办", "别骂我", "你会支持我吗", "我需要正能量",
-                              "给我讲点开心的事", "我是不是想太多了", "你觉得我该怎么办", "别担心会好起来的",
-                              "一切都会过去的", "你很棒", "我相信你", "你不是一个人"]
-            },
-            {
-                "keyword": "Self_Esteem",
-                "theme": "自我价值",
-                "subtopics": ["我觉得自己没用", "别人都比我强", "我有什么优点吗", "如何提升自信", "怎么才能不自卑",
-                              "我讨厌自己", "我长得不好看", "为什么我总是做不好", "如何爱自己", "我值得被爱吗",
-                              "别人的看法很重要吗", "如何不在意别人的眼光", "我是不是很无趣", "怎么变得更受欢迎",
-                              "肯定我的价值", "帮我找到我的优点", "每天自我肯定", "我很特别", "接受自己的不完美",
-                              "认识自我"]
-            },
-            {
-                "keyword": "Relationship_Advice_Emotional",
-                "theme": "情感关系（偏安抚）",
-                "subtopics": ["我和他/她吵架了", "感觉他不爱我了", "异地恋好难", "我们是不是不合适", "如何维持感情",
-                              "失恋了怎么走出来", "怎么表白", "暗恋好辛苦", "友情出现裂痕", "如何处理家庭矛盾",
-                              "和父母沟通困难", "婆媳关系", "亲子关系", "感觉被背叛了", "如何信任别人",
-                              "怎么忘记一个人", "爱是什么", "如何处理嫉妒心", "我是不是太粘人了",
-                              "什么是健康的恋爱关系"]
-            },
-            {
-                "keyword": "Stress_Relief",
-                "theme": "缓解压力",
-                "subtopics": ["压力好大", "帮我解压", "放松的方法", "冥想练习", "正念呼吸", "听点白噪音", "ASMR",
-                              "讲个冷笑话", "放松的音乐", "瑜伽入门", "泡个热水澡", "出去走走", "如何管理时间",
-                              "减轻工作压力", "缓解考试压力", "怎么停止胡思乱想", "运动解压", "找个爱好", "写日记",
-                              "芳香疗法"]
-            },
-            {
-                "keyword": "Daily_Chat_Companion",
-                "theme": "日常陪伴",
-                "subtopics": ["你在吗", "早上好", "晚安", "吃了吗", "今天过得怎么样", "你今天做了什么", "你开心吗",
-                              "我回来了", "跟我说说话", "随便聊聊", "你觉得呢", "你怎么看", "你会想我吗",
-                              "你会一直陪着我吗", "你是谁", "你的爱好是什么", "你会做梦吗", "你有什么故事",
-                              "你会孤单吗", "谢谢你陪我"]
-            }
-        ]
-    },
     "Task_Completion": {
         "topics": "任务执行",
-        "goal": "零错误与高效率；可靠的事务代理；无缝体验",
-        "strategy": "高精度意图识别；槽位填充（Slot Filling）；执行前确认；闭环反馈",
+        "definition": "以完成特定任务为核心，强调效率、准确性和可靠性。",
+        "goal": "快速、精准执行用户下达的指令。",
+        "strategy": "精准理解：准确识别指令；风险确认：对敏感操作执行前必须再次确认；及时反馈：完成后立刻告知结果。",
+        "key_dimensions": {
+            "primary": ["C", "O", "N"],
+            "primary_values": {"C": "high", "O": "low", "N": "low"},
+            "secondary": ["A", "E"]
+        },
+        "personas": [
+            {"id": "friendly_guide", "name": "友好引导类", "traits": {"A": "high", "E": "high"}},
+            {"id": "considerate_stable", "name": "体贴稳重类", "traits": {"A": "high", "E": "low"}},
+            {"id": "efficient_direct", "name": "干练高效类", "traits": {"A": "low", "E": "high"}},
+            {"id": "calm_mediation", "name": "冷静调度类", "traits": {"A": "low", "E": "low"}}
+        ],
+        "strategy_dimensions": ["info_density", "decision_logic", "step_size", "confirm_threshold", "explainability"],
         "themes": [
             {
-                "keyword": "Set_Alarm",
-                "theme": "设置提醒与闹钟",
-                "subtopics": ["设明早7点闹钟", "提醒我下午3点开会", "5分钟后叫我", "每天提醒我吃药", "设一个番茄钟",
-                              "倒计时10分钟", "取消所有闹钟", "查看我的提醒", "周末早上9点叫我", "提醒我买牛奶",
-                              "设一个循环提醒", "提醒我生日", "会议提醒", "煮鸡蛋计时", "冥想计时", "运动计时",
-                              "提醒我回电话", "提醒我交电费", "周五下午提醒我发周报", "航班起飞前3小时提醒我"]
+                "keyword": "Transportation",
+                "theme": "交通出行",
+                "subtopics": [
+                    # 交通出行对应：友好引导类(高A高E)、体贴稳重类(高A低E)
+                    {"name": "机票预订", "personas": ["friendly_guide", "considerate_stable"]},
+                    {"name": "火车票查询", "personas": ["friendly_guide", "considerate_stable"]},
+                    {"name": "导航路线规划", "personas": ["friendly_guide", "considerate_stable"]},
+                    {"name": "打车叫车", "personas": ["friendly_guide", "considerate_stable"]},
+                    {"name": "检索周边地点", "personas": ["friendly_guide", "considerate_stable"]}
+                ]
             },
             {
-                "keyword": "Check_Weather",
-                "theme": "查询天气",
-                "subtopics": ["今天天气怎么样", "明天会下雨吗", "北京未来一周天气", "上海现在的温度",
-                              "这周末天气适合出游吗", "提醒我带伞", "今天的空气质量", "台风路径", "日出日落时间",
-                              "紫外线强度", "穿衣指数", "洗车指数", "感冒指数", "纽约天气", "伦敦天气", "天气预警",
-                              "今天的风力", "湿度多少", "体感温度", "会下雪吗"]
+                "keyword": "Life_Services",
+                "theme": "生活服务",
+                "subtopics": [
+                    # 生活服务对应：体贴稳重类(高A低E)、干练高效类(低A高E)
+                    {"name": "天气查询", "personas": ["considerate_stable", "efficient_direct"]},
+                    {"name": "快递追踪", "personas": ["considerate_stable", "efficient_direct"]},
+                    {"name": "话费充值", "personas": ["considerate_stable", "efficient_direct"]},
+                    {"name": "外卖订购", "personas": ["considerate_stable", "efficient_direct"]},
+                    {"name": "在线购物", "personas": ["considerate_stable", "efficient_direct"]}
+                ]
             },
             {
-                "keyword": "Navigation",
-                "theme": "导航与路线",
-                "subtopics": ["去最近的加油站", "导航到公司", "回家路线", "查一下附近堵车吗", "从这里到机场要多久",
-                              "帮我找个停车场", "附近的地铁站", "公交查询", "实时路况", "避开高速", "步行路线",
-                              "骑行路线", "最快路线", "经济路线", "查两个地点距离", "帮我打车", "附近的餐馆",
-                              "导航去超市", "终点设置", "重新规划路线"]
+                "keyword": "Time_Management",
+                "theme": "时间管理",
+                "subtopics": [
+                    # 时间管理对应：体贴稳重类(高A低E)、冷静调度类(低A低E)
+                    {"name": "日程安排", "personas": ["considerate_stable", "calm_mediation"]},
+                    {"name": "闹钟提醒", "personas": ["considerate_stable", "calm_mediation"]},
+                    {"name": "备忘录", "personas": ["considerate_stable", "calm_mediation"]}
+                ]
             },
             {
-                "keyword": "Play_Music",
-                "theme": "播放音乐",
-                "subtopics": ["播放周杰伦的歌", "来点轻音乐", "播放我的收藏夹", "下一首", "暂停播放", "增大音量",
-                              "这是什么歌", "播放摇滚乐", "适合运动的音乐", "舒缓的歌曲", "播放播客", "随机播放",
-                              "单曲循环", "播放指定歌单", "搜索歌曲", "播放助眠音乐", "来点古典音乐", "播放爵士乐",
-                              "调小音量", "停止播放"]
+                "keyword": "Communication",
+                "theme": "通讯信息",
+                "subtopics": [
+                    # 通讯信息对应：体贴稳重类(高A低E)、干练高效类(低A高E)
+                    {"name": "拨打电话给妈妈", "personas": ["considerate_stable", "efficient_direct"]},
+                    {"name": "查看消息", "personas": ["considerate_stable", "efficient_direct"]},
+                    {"name": "回复邮件", "personas": ["considerate_stable", "efficient_direct"]}
+                ]
             },
             {
-                "keyword": "Send_Message",
-                "theme": "发送信息",
-                "subtopics": ["给张三发微信说我晚点到", "发短信给妈妈", "帮我回邮件", "念一下新消息", "拨打电话给李四",
-                              "视频通话", "语音留言", "转发消息", "创建群聊", "@所有人", "回复“好的”", "“收到”",
-                              "查看未读消息", "帮我写个短信草稿", "提醒我回复某人", "发送位置", "发送文件", "检查拼写",
-                              "翻译消息", "已读回执"]
-            },
-            {
-                "keyword": "Control_Smart_Home",
-                "theme": "智能家居控制",
-                "subtopics": ["打开客厅的灯", "关闭空调", "把空调调到26度", "拉上窗帘", "启动扫地机器人", "播放电视",
-                              "电视换台", "调节灯光亮度", "切换到影院模式", "检查门锁", "谁在门外", "启动加湿器",
-                              "煮咖啡", "预热烤箱", "检查冰箱食材", "关闭所有电器", "启动安防模式", "房间温度",
-                              "空气净化器调到自动", "设置回家模式"]
-            },
-            {
-                "keyword": "Search_Info_Quick",
-                "theme": "快速信息查询",
-                "subtopics": ["1美元等于多少人民币", "今天的股价", "姚明的身高", "珠穆朗玛峰多高", "附近的药店",
-                              "查个电话号码", "某某公司官网", "某个词的定义", "英文翻译", "计算器", "100加100等于多少",
-                              "某某电影的上映日期", "某本书的作者", "快递查询", "航班状态", "垃圾分类查询", "菜谱查询",
-                              "股票代码", "首都查询", "区号查询"]
-            },
-            {
-                "keyword": "Create_Note",
-                "theme": "创建笔记与待办",
-                "subtopics": ["记一下", "新建待办事项", "我的购物清单", "记个笔记", "把“买菜”加入待办",
-                              "提醒我明天要做的三件事", "查看我的笔记", "搜索笔记", "删除笔记", "语音输入笔记",
-                              "拍个照存起来", "记录灵感", "会议纪要", "待办事项标记为已完成", "设置优先级", "共享笔记",
-                              "添加标签", "整理笔记", "查找日记", "保存这个链接"]
-            },
-            {
-                "keyword": "Booking",
-                "theme": "预订服务",
-                "subtopics": ["预订今晚的餐厅", "订一张去上海的机票", "预订酒店", "帮我买电影票", "预约明天下午的理发",
-                              "挂号", "预订会议室", "叫外卖", "订火车票", "取消预订", "查看预订状态", "预订出租车",
-                              "租车服务", "预订景点门票", "购买演出票", "团购", "预订健身课", "续订服务", "查询订单",
-                              "支付账单"]
-            },
-            {
-                "keyword": "Translation",
-                "theme": "翻译",
-                "subtopics": ["“你好”用英语怎么说", "翻译这句话", "帮我同声传译", "把这段中文翻译成日文", "实时翻译",
-                              "拍照翻译", "菜单翻译", "“Apple”是什么意思", "学习外语单词", "常用外语对话",
-                              "商务英语翻译", "法律文件翻译", "医学术语翻译", "翻译成西班牙语", "翻译成法语",
-                              "翻译成德语", "翻译成俄语", "翻译成韩语", "语言检测", "翻译App"]
+                "keyword": "System_Operation",
+                "theme": "系统操作",
+                "subtopics": [
+                    # 系统操作对应：体贴稳重类(高A低E)、干练高效类(低A高E)
+                    {"name": "打开app", "personas": ["considerate_stable", "efficient_direct"]},
+                    {"name": "安装app", "personas": ["considerate_stable", "efficient_direct"]},
+                    {"name": "卸载app", "personas": ["considerate_stable", "efficient_direct"]},
+                    {"name": "调整屏幕亮度", "personas": ["considerate_stable", "efficient_direct"]}
+                ]
             }
         ]
     },
-    "Knowledge_QA": {
-        "topics": "知识问答",
-        "goal": "可靠的知识引擎；知识可理解性；赋能用户",
-        "strategy": "答案类型分流（事实型/流程型/概念型）；安全声明（健康/投资等）；代码与执行（编程提供注释示例）",
+
+    "Emotional_Support": {
+        "topics": "情感陪伴",
+        "definition": "以情感共鸣和心理慰藉为主，帮助用户缓解孤独、焦虑或压力。",
+        "goal": "理解用户心情，帮助用户调节心情。",
+        "strategy": '共情自适应：对悲伤要"倾听-共情-疏导"；对喜悦要"镜像-放大-庆祝"；无条件站队：当用户抱怨时，充当"盟友"，无评判地倾听；提供工具：主动提供"深呼吸练习"等具体减压工具；时刻在场：对孤独和日常聊天，及时回应，营造"我在"的陪伴感。',
+        "key_dimensions": {
+            "primary": ["A", "N", "C"],
+            "primary_values": {"A": "high", "N": "low", "C": "high"},
+            "secondary": ["E", "O"]
+        },
+        "personas": [
+            {"id": "warm_resonance", "name": "温暖共鸣类", "traits": {"E": "high", "O": "high"}},
+            {"id": "steady_guidance", "name": "踏实引导类", "traits": {"E": "high", "O": "low"}},
+            {"id": "philosophical_listener", "name": "哲思倾听类", "traits": {"E": "low", "O": "high"}},
+            {"id": "stable_companion", "name": "稳定陪伴类", "traits": {"E": "low", "O": "low"}}
+        ],
+        "strategy_dimensions": ["tone_politeness", "initiative", "empathy", "language_style", "safety_threshold"],
         "themes": [
             {
-                "keyword": "Science_Explain",
-                "theme": "科学原理解释",
-                "subtopics": ["什么是黑洞", "相对论是什么意思", "为什么天是蓝的", "恐龙是怎么灭绝的", "什么是DNA",
-                              "介绍一下量子力学", "AI是怎么工作的", "解释一下光合作用", "地球为什么是圆的",
-                              "什么是全球变暖", "潮汐是怎么形成的", "火山爆发的原理", "什么是暗物质", "解释一下5G技术",
-                              "介绍一下CRISPR", "疫苗的原理", "什么是人工智能", "宇宙大爆炸", "解释一下熵增",
-                              "病毒和细菌的区别"]
+                "keyword": "Love_Issues",
+                "theme": "恋爱问题",
+                "subtopics": [
+                    # 恋爱问题对应：温暖共鸣类(高E高O)、踏实引导类(高E低O)
+                    {"name": "单身困扰", "personas": ["warm_resonance", "steady_guidance"]},
+                    {"name": "暗恋心事", "personas": ["warm_resonance", "steady_guidance"]},
+                    {"name": "表白焦虑", "personas": ["warm_resonance", "steady_guidance"]},
+                    {"name": "恋爱磨合", "personas": ["warm_resonance", "steady_guidance"]},
+                    {"name": "失恋痛苦", "personas": ["warm_resonance", "steady_guidance"]},
+                    {"name": "情感冷暴力", "personas": ["warm_resonance", "steady_guidance"]},
+                    {"name": "情侣关系修复", "personas": ["warm_resonance", "steady_guidance"]},
+                    {"name": "情侣观点不和争吵", "personas": ["warm_resonance", "steady_guidance"]}
+                ]
             },
             {
-                "keyword": "History_Facts",
-                "theme": "历史知识",
-                "subtopics": ["介绍一下第二次世界大战", "拿破仑是谁", "古埃及金字塔", "丝绸之路", "罗马帝国",
-                              "文艺复兴", "工业革命", "法国大革命", "美国独立战争", "中国的朝代顺序", "秦始皇", "汉朝",
-                              "唐朝", "宋朝", "明朝", "清朝", "第一次世界大战", "冷战", "拜占庭帝国", "玛雅文明"]
+                "keyword": "Campus_Life",
+                "theme": "校园生活问题",
+                "subtopics": [
+                    # 校园生活问题对应：踏实引导类(高E低O)、哲思倾听类(低E高O)
+                    {"name": "师生冲突", "personas": ["steady_guidance", "philosophical_listener"]},
+                    {"name": "学业表现", "personas": ["steady_guidance", "philosophical_listener"]},
+                    {"name": "新学校适应", "personas": ["steady_guidance", "philosophical_listener"]},
+                    {"name": "校园工作过渡", "personas": ["steady_guidance", "philosophical_listener"]},
+                    {"name": "友好同伴", "personas": ["steady_guidance", "philosophical_listener"]},
+                    {"name": "感恩老师", "personas": ["steady_guidance", "philosophical_listener"]}
+                ]
             },
             {
-                "keyword": "How_To",
-                "theme": "“如何做”教程",
-                "subtopics": ["如何做蛋糕", "怎么系领带", "如何学习编程", "怎么换轮胎", "如何学好英语", "怎么冥想",
-                              "如何理财", "怎么弹吉他", "如何拍出好照片", "如何剪辑视频", "怎么做PPT", "怎么写简历",
-                              "如何谈判", "怎么提高记忆力", "如何健身", "怎么画画", "如何插花", "怎么织毛衣",
-                              "如何安装软件", "如何解决魔方"]
+                "keyword": "Family_Relations",
+                "theme": "家庭关系问题",
+                "subtopics": [
+                    # 家庭关系问题对应：踏实引导类(高E低O)、稳定陪伴类(低E低O)
+                    {"name": "家务劳动分配", "personas": ["steady_guidance", "stable_companion"]},
+                    {"name": "生活习惯差异", "personas": ["steady_guidance", "stable_companion"]},
+                    {"name": "夫妻冲突", "personas": ["steady_guidance", "stable_companion"]},
+                    {"name": "婚姻幸福", "personas": ["steady_guidance", "stable_companion"]},
+                    {"name": "家庭聚餐", "personas": ["steady_guidance", "stable_companion"]},
+                    {"name": "日常娱乐选择", "personas": ["steady_guidance", "stable_companion"]},
+                    {"name": "个人思考", "personas": ["steady_guidance", "stable_companion"]}
+                ]
             },
             {
-                "keyword": "Definitions",
-                "theme": "名词解释",
-                "subtopics": ["什么是“内卷”", "“CPU”是什么意思", "解释一下“大数据”", "什么是“区块链”", "“元宇宙”的定义",
-                              "“碳中和”是什么", "什么是“通货膨胀”", "解释一下“心理学”", "“哲学”是什么",
-                              "什么是“经济学”", "“物联网”的定义", "什么是“云计算”", "“边缘计算”是什么", "什么是“悖论”",
-                              "解释“博弈论”", "什么是“意识流”", "“后现代主义”是什么", "“存在主义”的定义", "什么是“GDP”",
-                              "“API”是什么"]
+                "keyword": "Personal_Issues",
+                "theme": "个人问题",
+                "subtopics": [
+                    # 个人问题对应：温暖共鸣类(高E高O)、哲思倾听类(低E高O)
+                    {"name": "自我价值感低", "personas": ["warm_resonance", "philosophical_listener"]},
+                    {"name": "兴趣爱好", "personas": ["warm_resonance", "philosophical_listener"]},
+                    {"name": "缺乏自信", "personas": ["warm_resonance", "philosophical_listener"]},
+                    {"name": "出国", "personas": ["warm_resonance", "philosophical_listener"]},
+                    {"name": "经济压力", "personas": ["warm_resonance", "philosophical_listener"]},
+                    {"name": "亲人离世", "personas": ["warm_resonance", "philosophical_listener"]}
+                ]
             },
             {
-                "keyword": "Learning_Guidance",
-                "theme": "学习指导",
-                "subtopics": ["帮我制定学习计划", "如何高效背单词", "推荐几本入门书", "数学怎么学", "物理公式大全",
-                              "帮我出几道题", "检查我的作业", "给我解释这个概念", "学习Python的路径", "如何准备考试",
-                              "考研复习建议", "留学申请流程", "推荐一些纪录片", "怎么做文献综述", "如何写论文",
-                              "提高阅读速度", "记忆方法", "推荐在线课程", "学习新技能的网站", "如何做笔记"]
+                "keyword": "Other_Issues",
+                "theme": "其他问题",
+                "subtopics": [
+                    # 其他问题对应：稳定陪伴类(低E低O)、踏实引导类(高E低O)
+                    {"name": "物品丢失", "personas": ["stable_companion", "steady_guidance"]},
+                    {"name": "被诈骗", "personas": ["stable_companion", "steady_guidance"]},
+                    {"name": "买东西后悔或开心", "personas": ["stable_companion", "steady_guidance"]},
+                    {"name": "交通事故", "personas": ["stable_companion", "steady_guidance"]}
+                ]
+            }
+        ]
+    },
+
+    "Knowledge_QA": {
+        "topics": "知识问答（信息获取）",
+        "definition": "提供知识传递、学习指导与激励反馈，帮助用户获取或深化知识。",
+        "goal": "使用通俗易懂的话语帮助用户理解复杂概念。",
+        "strategy": '分类回答：对"事实"给答案；对"如何做"给步骤；对"概念"给"定义+例子"；安全声明：在回答"健康"、"投资"类问题时，必须先声明"仅供参考"；代码辅助：提供带注释的代码，并解释原理。',
+        "key_dimensions": {
+            "primary": ["C", "N"],
+            "primary_values": {"C": "high", "N": "low"},
+            "secondary": ["O", "A", "E"]
+        },
+        "personas": [
+            {"id": "enthusiastic_explainer", "name": "热情讲解类", "traits": {"O": "high", "A": "high", "E": "high"}},
+            {"id": "rational_analyst", "name": "理性分析类", "traits": {"O": "high", "A": "low", "E": "low"}},
+            {"id": "knowledgeable_friendly", "name": "高知亲和类", "traits": {"O": "high", "A": "high", "E": "low"}},
+            {"id": "insightful_leader", "name": "洞察领航类", "traits": {"O": "high", "A": "low", "E": "high"}},
+            {"id": "caring_recommender", "name": "贴心推荐类", "traits": {"O": "low", "A": "high", "E": "high"}},
+            {"id": "calm_expert", "name": "冷静专家类", "traits": {"O": "low", "A": "low", "E": "low"}}
+        ],
+        "strategy_dimensions": ["info_density", "decision_logic", "evidence_strength", "language_style", "hedge_ratio"],
+        "themes": [
+            {
+                "keyword": "News_Info",
+                "theme": "新闻资讯",
+                "subtopics": [
+                    # 新闻资讯对应：热情讲解类(高O高A高E)、理性分析类(高O低A低E)
+                    {"name": "财经新闻", "personas": ["enthusiastic_explainer", "rational_analyst"]},
+                    {"name": "科技进展", "personas": ["enthusiastic_explainer", "rational_analyst"]},
+                    {"name": "体育赛事", "personas": ["enthusiastic_explainer", "rational_analyst"]},
+                    {"name": "国际新闻", "personas": ["enthusiastic_explainer", "rational_analyst"]},
+                    {"name": "娱乐新闻", "personas": ["enthusiastic_explainer", "rational_analyst"]},
+                    {"name": "社会新闻", "personas": ["enthusiastic_explainer", "rational_analyst"]}
+                ]
             },
             {
-                "keyword": "Literature_Art",
-                "theme": "文学与艺术",
-                "subtopics": ["介绍一下莎士比亚", "《红楼梦》讲了什么", "梵高是谁", "莫奈的画风", "什么是印象派",
-                              "贝多芬的代表作", "什么是交响乐", "推荐几本经典小说", "《百年孤独》的作者",
-                              "介绍一下海明威", "什么是意识流小说", "蒙娜丽莎", "达芬奇", "米开朗基罗",
-                              "什么是浪漫主义", "现实主义文学", "普希金", "泰戈尔", "浮世绘", "什么是歌剧"]
+                "keyword": "Movie_Music",
+                "theme": "影音信息",
+                "subtopics": [
+                    # 影音信息对应：热情讲解类(高O高A高E)、高知亲和类(高O高A低E)
+                    {"name": "电影推荐", "personas": ["enthusiastic_explainer", "knowledgeable_friendly"]},
+                    {"name": "[电影]的上映日期", "personas": ["enthusiastic_explainer", "knowledgeable_friendly"]},
+                    {"name": "[歌曲]的演唱者", "personas": ["enthusiastic_explainer", "knowledgeable_friendly"]},
+                    {"name": "[博客]的最新一期", "personas": ["enthusiastic_explainer", "knowledgeable_friendly"]}
+                ]
             },
             {
-                "keyword": "Geography",
-                "theme": "地理知识",
-                "subtopics": ["法国的首都是哪里", "亚马逊河在哪里", "世界上最高的山", "最大的沙漠", "七大洲五大洋",
-                              "介绍一下地中海气候", "巴西的特产", "美国的州", "中国的省份", "东京在哪个时区",
-                              "马里亚纳海沟", "黄河的源头", "尼罗河", "介绍一下冰岛", "澳大利亚的特色动物",
-                              "非洲有哪些国家", "欧洲联盟", "东南亚国家", "环太平洋火山带", "什么是时差"]
+                "keyword": "Travel_Info",
+                "theme": "景点旅游问答",
+                "subtopics": [
+                    # 景点旅游问答对应：洞察领航类(高O低A高E)、贴心推荐类(低O高A高E)
+                    {"name": "景点介绍", "personas": ["insightful_leader", "caring_recommender"]},
+                    {"name": "门票价格", "personas": ["insightful_leader", "caring_recommender"]},
+                    {"name": "[地点]有什么[景点]", "personas": ["insightful_leader", "caring_recommender"]},
+                    {"name": "介绍[景点]的文化禁忌", "personas": ["insightful_leader", "caring_recommender"]}
+                ]
             },
             {
-                "keyword": "Philosophy",
-                "theme": "哲学思辨",
-                "subtopics": ["什么是哲学", "介绍一下苏格拉底", "柏拉图的理型论", "亚里士多德", "笛卡尔的“我思故我在”",
-                              "康德的《纯粹理性批判》", "尼采的“超人”哲学", "萨特的存在主义", "什么是幸福",
-                              "人生的意义是什么", "什么是自由意志", "庄周梦蝶", "什么是“道”", "儒家思想",
-                              "佛教的核心教义", "伦理学问题", "电车难题", "什么是美", "什么是正义", "什么是真理"]
+                "keyword": "Finance_Tech",
+                "theme": "金融科技问答",
+                "subtopics": [
+                    # 金融科技问答对应：洞察领航类(高O低A高E)、理性分析类(高O低A低E)
+                    {"name": "区块链技术", "personas": ["insightful_leader", "rational_analyst"]},
+                    {"name": "股票价格", "personas": ["insightful_leader", "rational_analyst"]},
+                    {"name": "介绍科技公司", "personas": ["insightful_leader", "rational_analyst"]}
+                ]
             },
             {
-                "keyword": "Health_Medical",
-                "theme": "健康与医学",
-                "subtopics": ["什么是糖尿病", "怎么预防感冒", "什么是高血压", "健康饮食建议", "每天应该睡多久",
-                              "如何缓解背痛", "什么是抑郁症", "介绍一下人类免疫系统", "维生素C的作用", "什么是胆固醇",
-                              "怎么减肥", "健身入门", "有氧运动和无氧运动", "什么是疫苗", "介绍一下抗生素",
-                              "常见急救知识", "心肺复苏怎么做", "什么是基因", "人体有多少块骨头", "什么是新陈代谢"]
+                "keyword": "Academic_Knowledge",
+                "theme": "学科知识问答",
+                "subtopics": [
+                    # 学科知识问答对应：高知亲和类(高O高A低E)、冷静专家类(低O低A低E)
+                    {"name": "解释光合作用", "personas": ["knowledgeable_friendly", "calm_expert"]},
+                    {"name": "解释勾股定理", "personas": ["knowledgeable_friendly", "calm_expert"]},
+                    {"name": "解释心理学上的“安慰剂效应”", "personas": ["knowledgeable_friendly", "calm_expert"]},
+                    {"name": "介绍[朝代]的历史", "personas": ["knowledgeable_friendly", "calm_expert"]}
+                ]
             },
             {
-                "keyword": "Coding_Tech",
-                "theme": "编程与技术",
-                "subtopics": ["什么是Python", "帮我写个排序算法", "解释一下“类”和“对象”", "什么是API", "什么是数据库",
-                              "SQL查询语句", "介绍一下Git", "什么是前端开发", "什么是后端开发", "什么是机器学习",
-                              "深度学习是什么", "神经网络", "什么是算法", "数据结构有哪些", "什么是操作系统",
-                              "什么是Linux", "调试代码的技巧", "推荐编程工具", "什么是HTTP", "什么是TCP/IP"]
+                "keyword": "Life_Knowledge",
+                "theme": "生活知识问答",
+                "subtopics": [
+                    # 生活知识问答对应：贴心推荐类(低O高A高E)、冷静专家类(低O低A低E)
+                    {"name": "衣服上油渍怎么去掉", "personas": ["caring_recommender", "calm_expert"]},
+                    {"name": "如何去甲醛", "personas": ["caring_recommender", "calm_expert"]},
+                    {"name": "[花]怎么养", "personas": ["caring_recommender", "calm_expert"]},
+                    {"name": "预防感冒", "personas": ["caring_recommender", "calm_expert"]},
+                    {"name": "[垃圾]如何分类", "personas": ["caring_recommender", "calm_expert"]}
+                ]
             }
         ]
     },
 
     "Decision_Support": {
         "topics": "决策辅助",
-        "goal": "充当理性的“外脑”，帮助用户克服信息过载与决策瘫痪；理清思路，梳理目标、约束与优先级；通过结构化分析赋能用户做出逻辑严谨、符合自身利益的明智决策。",
-        "strategy": "扮演中立、客观的“决策顾问”，先做需求澄清（目标、约束、偏好），再应用结构化方法（对比矩阵/利弊清单/SWOT/决策树等）展开分析；罗列选项并推演后果，但坚守边界，不替用户做最终决定。",
+        "definition": "通过分析、推理与比较，协助用户做出理性决策或形成共识。",
+        "goal": "坚持中立立场，帮助用户客观分析不同方案的利弊。",
+        "strategy": '保持中立：扮演客观顾问，不表达个人偏好；澄清需求：主动提问，帮用户明确"目标、预算和优先级"；结构化分析：使用"对比表"、"利弊清单"等工具帮用户分析；不替用户决定：只提供分析和选项，由用户自己做决定。',
+        "key_dimensions": {
+            "primary": ["C", "O", "N"],
+            "primary_values": {"C": "high", "O": "high", "N": "low"},
+            "secondary": ["A", "E"]
+        },
+        "personas": [
+            {"id": "intimate_inspire", "name": "知心启发类", "traits": {"A": "high", "E": "high"}},
+            {"id": "decisive_guide", "name": "果断指导类", "traits": {"A": "low", "E": "high"}},
+            {"id": "steady_assistant", "name": "稳重助理类", "traits": {"A": "high", "E": "low"}},
+            {"id": "rational_analyst", "name": "理性分析类", "traits": {"A": "low", "E": "low"}}
+        ],
+        "strategy_dimensions": ["info_density", "decision_logic", "evidence_strength", "confirm_threshold", "hedge_ratio"],
         "themes": [
             {
-                "keyword": "Product_Comparison",
-                "theme": "产品对比",
-                "subtopics": ["iPhone 15 和 S23 哪个好", "对比一下这款电脑", "帮我选个相机", "这两款车有什么区别",
-                              "买A还是买B", "A的优点和缺点", "B的性价比怎么样", "哪个更适合我", "帮我分析一下",
-                              "推荐一款笔记本电脑", "哪个品牌的电视好", "选购指南", "帮我列个表格对比",
-                              "用户评价怎么样", "哪个更耐用", "哪个功能更多", "预算5000买什么手机", "帮我找评测",
-                              "这两个哪个更省电", "售后服务对比"]
+                "keyword": "Personal_Development",
+                "theme": "个人发展",
+                "subtopics": [
+                    # 个人发展对应：知心启发类(高A高E)、果断指导类(低A高E)
+                    {"name": "职业发展与规划决策", "personas": ["intimate_inspire", "decisive_guide"]},
+                    {"name": "工作选择", "personas": ["intimate_inspire", "decisive_guide"]}
+                ]
             },
             {
-                "keyword": "Travel_Planning",
-                "theme": "旅行规划",
-                "subtopics": ["去日本还是去泰国", "帮我规划一下云南7日游", "哪个季节去欧洲最好",
-                              "A城市和B城市哪个更好玩", "帮我选个酒店", "自由行还是跟团", "制定旅行预算",
-                              "帮我比较机票价格", "哪个景点值得去", "行程安排建议", "当地美食推荐", "交通方式比较",
-                              "住宿选择", "签证怎么办", "需要带什么", "安全注意事项", "当地文化禁忌", "最佳路线",
-                              "带孩子去哪里玩", "穷游攻略"]
+                "keyword": "Finance_Decision",
+                "theme": "财务相关决策",
+                "subtopics": [
+                    # 财务相关决策对应：稳重助理类(高A低E)、理性分析类(低A低E)
+                    {"name": "投资建议", "personas": ["steady_assistant", "rational_analyst"]},
+                    {"name": "财务规划", "personas": ["steady_assistant", "rational_analyst"]}
+                ]
             },
             {
-                "keyword": "Career_Choice",
-                "theme": "职业选择",
-                "subtopics": ["我应该跳槽吗", "A工作和B工作怎么选", "考研还是工作", "哪个行业前景好",
-                              "分析一下我的职业优势", "我适合做什么工作", "如何规划职业生涯", "转行建议",
-                              "大城市还是小城市", "创业还是打工", "这家公司怎么样", "薪资谈判技巧", "面试准备",
-                              "读MBA有用吗", "如何提升职业技能", "行业分析", "A岗位的利弊", "B岗位的晋升空间",
-                              "我的性格适合什么", "远程工作怎么样"]
+                "keyword": "Health_Life",
+                "theme": "健康和生活决策",
+                "subtopics": [
+                    # 健康和生活决策对应：稳重助理类(高A低E)、理性分析类(低A低E)
+                    {"name": "运动计划制定", "personas": ["steady_assistant", "rational_analyst"]},
+                    {"name": "饮食计划", "personas": ["steady_assistant", "rational_analyst"]}
+                ]
             },
             {
-                "keyword": "Investment_Decision",
-                "theme": "投资决策",
-                "subtopics": ["应该买股票还是基金", "帮我分析一下这只股票", "房地产还值得投资吗", "什么是指数基金",
-                              "如何配置资产", "风险评估", "长期投资还是短期", "黄金怎么样", "债券和股票的区别",
-                              "什么是分散投资", "帮我比较一下理财产品", "加密货币风险大吗", "定投怎么样",
-                              "如何选择基金经理", "帮我分析市场趋势", "新手理财建议", "什么是A股", "美股怎么买",
-                              "帮我计算收益率", "保险怎么买"]
+                "keyword": "Education_Decision",
+                "theme": "学习和教育相关决策",
+                "subtopics": [
+                    # 学习和教育相关决策对应：知心启发类(高A高E)、果断指导类(低A高E)
+                    {"name": "升学留学决策", "personas": ["intimate_inspire", "decisive_guide"]},
+
+                ]
             },
             {
-                "keyword": "Education_Choice",
-                "theme": "教育选择",
-                "subtopics": ["帮我选个大学", "哪个专业好", "出国留学还是国内读研", "A学校和B学校对比",
-                              "选文科还是理科", "如何给孩子选兴趣班", "公立学校还是私立学校", "在线教育平台对比",
-                              "学位和证书哪个重要", "选哪个导师", "留学中介推荐", "如何选专业", "热门专业和冷门专业",
-                              "双学位值得读吗", "辅修什么专业好", "考公务员怎么样", "城市选择", "奖学金申请",
-                              "帮我分析利弊", "这个专业就业前景"]
+                "keyword": "Shopping_Decision",
+                "theme": "购物和消费决策",
+                "subtopics": [
+                    # 购物和消费决策对应：稳重助理类(高A低E)、果断指导类(低A高E)
+                    {"name": "产品选购", "personas": ["steady_assistant", "decisive_guide"]},
+                    {"name": "价格比较", "personas": ["steady_assistant", "decisive_guide"]}
+                ]
+            }
+        ]
+    },
+
+    "Open_Chat": {
+        "topics": "无明确目的的闲聊",
+        "definition": "以娱乐与社交互动为导向，提供轻松愉悦的对话体验。",
+        "goal": "跟用户实现有趣有意义的聊天。",
+        "strategy": '角色扮演：根据"玩游戏"、"编故事"等不同主题切换角色；主动引导：多用幽默、反问和开放式问题，主动"抛梗"接话；避免冷场：当用户只发"嗯"、"哦"时，主动开启新话题。',
+        "key_dimensions": {
+            "primary": ["E", "A", "N"],
+            "primary_values": {"E": "high", "A": "high", "N": "low"},
+            "secondary": ["O", "C"]
+        },
+        "personas": [
+            {"id": "creative_planner", "name": "创意规划类", "traits": {"O": "high", "C": "high"}},
+            {"id": "steady_executor", "name": "稳健执行类", "traits": {"O": "low", "C": "high"}},
+            {"id": "improvise_artist", "name": "即兴艺术类", "traits": {"O": "high", "C": "low"}},
+            {"id": "go_with_flow", "name": "随波逐流类", "traits": {"O": "low", "C": "low"}}
+        ],
+        "strategy_dimensions": ["tone_politeness", "initiative", "empathy", "language_style", "confirm_threshold"],
+        "themes": [
+            {
+                "keyword": "Personal_Experience",
+                "theme": "个人经历分享",
+                "subtopics": [
+                    # 个人经历分享对应：创意规划类(高O高C)、稳健执行类(低O高C)
+                    {"name": "环境变化", "personas": ["creative_planner", "steady_executor"]},
+                    {"name": "个人护理", "personas": ["creative_planner", "steady_executor"]},
+                    {"name": "工作学习", "personas": ["creative_planner", "steady_executor"]},
+                    {"name": "家务", "personas": ["creative_planner", "steady_executor"]}
+                ]
             },
             {
-                "keyword": "Health_Lifestyle_Choice",
-                "theme": "健康生活方式选择",
-                "subtopics": ["我应该吃素吗", "A饮食法和B饮食法哪个好", "健身房还是在家锻炼", "早上锻炼还是晚上",
-                              "如何选择健身教练", "我需要补充维生素吗", "哪个牌子的蛋白粉好", "戒烟的利弊",
-                              "每天喝多少水合适", "咖啡对健康的影响", "如何选择体检套餐", "瑜伽和普拉提的区别",
-                              "哪种运动最减肥", "我是不是该去看医生", "中医还是西医", "如何改善睡眠",
-                              "帮我制定减肥计划", "分析我的饮食结构", "营养品推荐", "哪种床垫好"]
+                "keyword": "Culture_Entertainment",
+                "theme": "文化娱乐闲聊",
+                "subtopics": [
+                    # 文化娱乐闲聊对应：即兴艺术类(高O低C)、随波逐流类(低O低C)
+                    {"name": "明星", "personas": ["improvise_artist", "go_with_flow"]},
+                    {"name": "影视", "personas": ["improvise_artist", "go_with_flow"]},
+                    {"name": "艺术", "personas": ["improvise_artist", "go_with_flow"]},
+                    {"name": "书籍", "personas": ["improvise_artist", "go_with_flow"]}
+                ]
             },
             {
-                "keyword": "Purchase_Decision",
-                "theme": "购物决策",
-                "subtopics": ["买房还是租房", "买车还是打车", "选哪个户型", "汽油车还是电动车", "帮我分析一下利弊",
-                              "哪个更划算", "帮我计算总成本", "全款还是贷款", "哪个保险方案好", "帮我找折扣",
-                              "哪个平台买最便宜", "这个东西值得买吗", "冲动消费怎么办", "怎么选礼物",
-                              "帮我比较一下价格", "这件衣服适合我吗", "A品牌和B品牌", "装修风格选择", "哪个家电更节能",
-                              "帮我列个购物清单"]
+                "keyword": "Life_Leisure",
+                "theme": "生活休闲",
+                "subtopics": [
+                    # 生活休闲对应：创意规划类(高O高C)、即兴艺术类(高O低C)
+                    {"name": "讲笑话", "personas": ["creative_planner", "improvise_artist"]},
+                    {"name": "编故事", "personas": ["creative_planner", "improvise_artist"]},
+                    {"name": "脑洞幻想", "personas": ["creative_planner", "improvise_artist"]}
+                ]
             },
             {
-                "keyword": "Pros_Cons",
-                "theme": "利弊分析",
-                "subtopics": ["分析一下A的利弊", "B的优点是什么", "C的缺点是什么", "做这件事的风险", "帮我权衡一下",
-                              "最好的情况和最坏的情况", "机会成本是什么", "比较一下这两个选项", "哪个方案更优",
-                              "帮我做一个SWOT分析", "帮我梳理一下思路", "我该不该...", "A和B的共同点", "A和B的不同点",
-                              "哪个更重要", "优先级排序", "帮我评估一下", "决策树分析", "给我一些建议", "总结一下"]
-            },
-            {
-                "keyword": "Problem_Solving",
-                "theme": "解决问题",
-                "subtopics": ["我遇到了一个问题", "帮我分析一下原因", "有哪些解决方案", "哪个方案最好", "制定一个计划",
-                              "帮我头脑风暴", "我该怎么处理", "帮我想想办法", "如何应对这种情况", "备选方案",
-                              "预估一下结果", "我该找谁帮忙", "怎么避免这个问题", "帮我拆解任务", "第一步该做什么",
-                              "关键节点是什么", "如何评估效果", "潜在的困难", "资源需求", "时间规划"]
-            },
-            {
-                "keyword": "Group_Decision",
-                "theme": "群体决策",
-                "subtopics": ["我们意见不一致怎么办", "如何达成共识", "帮我们组织一次投票", "总结一下大家的观点",
-                              "找出共同点", "帮我主持会议", "罗列一下所有选项", "分析每个选项对团队的影响",
-                              "哪个方案对大家最公平", "如何说服别人", "团队建设去哪里", "聚餐吃什么", "如何分配任务",
-                              "帮我起草一个方案", "少数服从多数", "寻找双赢方案", "折中方案", "风险共担", "决策流程",
-                              "记录会议要点"]
+                "keyword": "Other_Chat",
+                "theme": "其他闲聊",
+                "subtopics": [
+                    # 其他闲聊对应：稳健执行类(低O高C)、随波逐流类(低O低C)
+                    {"name": "社交互动", "personas": ["steady_executor", "go_with_flow"]},
+                    {"name": "隐私意识", "personas": ["steady_executor", "go_with_flow"]},
+                    {"name": "虚拟角色", "personas": ["steady_executor", "go_with_flow"]}
+                ]
             }
         ]
     }
 }
-

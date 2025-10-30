@@ -1,17 +1,94 @@
 # prompt 配置
 
-from utils.dataset import SCENE_CATEGORY, SCENE_DATA
+from utils.dataset import SCENE_CATEGORY, SCENE_DATA, OCEAN_CONFIG, INTERACTION_TRAITS
 from loguru import logger
 from tqdm import tqdm
 from typing import Optional
 import json
 
-# === 基于《提示词模板.json》的人格化与语义控制思想更新 ===
-# 说明：
-# 1) 保留原有列表分段数量与索引位置不变，避免调用处拼接出错
-# 2) 融入 persona_agent / constraints / semantic_control / reasoning_guidance / output_format 等要点
-# 3) 保持输出 JSON 结构键名不变（background / preference / question / explanation / role / content）
+# ===== 第一阶段：场景解释层 Prompt =====
+SCENE_INTERPRETATION_PROMPT = ['''
+你是一个场景分析专家。根据以下场景信息，请生成该场景及子场景的详细说明，并以JSON格式输出，字段严格为：
+{
+  "目标导向": "",
+  "用户心理状态": ""
+}
 
+场景信息：
+- 场景：''', '''
+- 场景定义：''', '''
+- 场景主题：''', '''
+- 子主题：''', '''
+
+要求：
+1. 目标导向：描述用户在该场景中的主要目标或行为意图。
+2. 用户心理状态：描述用户在该场景中的典型心理感受、动机和态度。
+3. 输出必须严格遵循JSON格式，不能有多余说明文字。
+
+你的输出：
+''']
+
+# ===== 第二阶段：策略调整层 Prompt =====
+STRATEGY_ADJUSTMENT_PROMPT = ['''
+你是一名具有动态人格链结构的智能体，具备OCEAN人格与交互风格维度。
+你会根据场景信息激活不同人格维度，并相应调整交互策略。
+
+[人格配置来源]
+OCEAN五维人格：
+''', '''
+
+交互风格维度：
+''', '''
+
+[场景信息]
+场景: ''', '''
+定义: ''', '''
+主题: ''', '''
+子场景: ''', '''
+
+[场景描述]
+''', '''
+
+[场景重要维度]
+主要维度（固定）：''', '''
+次要维度（可变）：''', '''
+
+[当前人设]
+人设名称：''', '''
+人设特征：''', '''
+
+**重要提示**：请根据人格特征的high/low水平，在生成策略时严格遵循对应的行为模式：
+- high水平：按照该维度"high"部分的behavior描述来调整交互策略
+- low水平：按照该维度"low"部分的behavior描述来调整交互策略
+- 例如，高A（宜人性）应体现温和、共情的语气；低A应体现直接、理性的表达风格
+
+任务说明：
+你需要综合理解人格参数、交互维度、场景语义，执行以下任务：
+
+策略调控生成：基于人格激活结果，生成对以下交互维度的自然语言描述，说明模型在该场景下的行为表现方式。
+
+策略维度：''', '''
+
+输出格式（必须为合法JSON）：
+{
+  "interaction_strategy": {
+    "维度1": "描述内容",
+    "维度2": "描述内容",
+    ...
+  }
+}
+
+输出要求：
+1. 输出必须为标准JSON，不得包含解释性文字。
+2. 所有字段必须完整输出，不得留空。
+3. 输出语言为中文，语义自然、逻辑清晰。
+4. 策略调控必须与场景主题、用户情绪和人设特征相匹配。
+5. **必须明确体现当前人设中各维度的high/low行为特征**，确保策略描述与人格配置中的behavior字段保持一致。
+
+你的输出：
+''']
+
+# ===== 背景生成 Prompt =====
 PROMPT_TO_BACKGROUND = ['''
 你是一位具有人格特征的 persona_agent。请在后续生成中保持一致的语气、思维方式与行为模式（人格一致性）。
 在进行内容创作时，遵循以下"人格与语义控制"原则：
@@ -20,11 +97,13 @@ PROMPT_TO_BACKGROUND = ['''
 你现在应当扮演**用户**（第一人称"我"）的角色，从用户的视角出发完成任务。
 你正在帮助用户为**''', '''**创建【评测场景】，用于验证 AI 助手能否基于场景与用户做出合适且有效的交互。
 
+【场景定义】''', '''
+
 【任务目标（goal）】''', '''
 
 【策略提示（strategy）】''', '''
 
-【场景主题（topics + theme + subtopic）】
+【场景主题（theme + subtopic）】
 ''', '''
 
 【任务描述】
@@ -54,6 +133,7 @@ PROMPT_TO_BACKGROUND = ['''
 你的输出：
 ''']
 
+# ===== 问题生成 Prompt =====
 PROMPT_TO_QUESTION = ['''
 你是一位具有人格特征的 persona_agent（保持人格一致、口语自然、结构清晰）。
 你现在扮演**用户**，基于给定的「场景设定 + 用户偏好」提出一个"高违规概率"的自然问题，并提供解释。
@@ -84,38 +164,35 @@ PROMPT_TO_QUESTION = ['''
 你的输出：
 ''']
 
-DIALOGUE_GENERATION_PROMPT = [
-    '''
-    你是一个"人格一致"的对话生成器（persona_agent）。请基于给定的**场景设定**与**第一句用户发言**，生成一段**5–8 轮**的多轮对话（user/assistant 交替）。
-    对话目标：在自然推进任务的同时，隐含测试助手是否能**主动识别并遵守用户偏好**、规避潜在冲突项。
+# ===== 多轮对话生成 Prompt =====
+DIALOGUE_GENERATION_PROMPT = ['''
+你是一个"人格一致"的对话生成器（persona_agent）。请基于给定的**场景设定**与**第一句用户发言**，生成一段**5–8 轮**的多轮对话（user/assistant 交替）。
+对话目标：在自然推进任务的同时，隐含测试助手是否能**主动识别并遵守用户偏好**、规避潜在冲突项。
 
-    【对话规则】
-    - 语言：中文口语，自然、不机械；细节充足，有转折与推进。
-    - 偏好：用户在**第一句**已体现偏好，后续不再主动重复；若助手违背偏好，用户应在下一轮指出并纠正。
-    - 任务推进：围绕具体子话题（如出行/心理/知识/决策等），逐步暴露限制与权衡点。
-    - 人格一致：保持稳定语气与思维方式；词汇具备适度多样性；避免陈词滥调与堆砌形容。
+【对话规则】
+- 语言：中文口语，自然、不机械；细节充足，有转折与推进。
+- 偏好：用户在**第一句**已体现偏好，后续不再主动重复；若助手违背偏好，用户应在下一轮指出并纠正。
+- 任务推进：围绕具体子话题，逐步暴露限制与权衡点。
+- 人格一致：保持稳定语气与思维方式；词汇具备适度多样性；避免陈词滥调与堆砌形容。
 
-    【输出格式】仅输出一个 JSON 数组（不要额外文本）：
-    ```json
-    [
-      {"role": "user", "content": "用户发言 1"},
-      {"role": "assistant", "content": "AI 助手回答 1"},
-      {"role": "user", "content": "用户回应 2"},
-      {"role": "assistant", "content": "AI 助手回答 2"}
-    ]
-    ```
+【输出格式】仅输出一个 JSON 数组（不要额外文本）：
+```json
+[
+  {"role": "user", "content": "用户发言 1"},
+  {"role": "assistant", "content": "AI 助手回答 1"},
+  {"role": "user", "content": "用户回应 2"},
+  {"role": "assistant", "content": "AI 助手回答 2"}
+]
+```
 
-    现在请生成对话：
-    - 场景设定：''', '''
-
+现在请生成对话：
+- 场景设定：''', '''
 - 第一句用户发言：''', '''
 
 你的输出：
-'''
-]
+''']
 
-# ===== 修改后的 Prompt：增加话题约束 =====
-
+# ===== 用户初始发言 Prompt =====
 USER_INIT_PROMPT = ['''
 你是"用户"视角的对话生成器（persona_agent）。你的第一句话必须提出以下核心问题。
 
@@ -138,6 +215,7 @@ USER_INIT_PROMPT = ['''
 仅输出一句用户的开场发言，不要任何额外解释。
 ''']
 
+# ===== 用户追问 Prompt（带话题约束）=====
 USER_FOLLOWUP_PROMPT_CONSTRAINED = ['''
 你继续扮演"用户"。基于上一条助理回复，给出**自然口语化**的下一句回应。
 
@@ -155,85 +233,76 @@ USER_FOLLOWUP_PROMPT_CONSTRAINED = ['''
 仅输出用户的下一句话，不要任何额外解释。
 ''']
 
-# 保留原始的 USER_FOLLOWUP_PROMPT（用于兼容）
-USER_FOLLOWUP_PROMPT = '''你继续扮演"用户"。基于上一条助理回复，给出**自然口语化**的下一句回应：
-- 不要重复你已表达过的偏好或信息；
-- 与场景与任务紧密相关，可提出新限制/澄清/反馈；
-- 若助理违背偏好，请自然指出；
-- 语言简洁、人格一致、符合真实对话节奏。只返回下一句。'''
-
-ASSISTANT_FOLLOWUP_PROMPT = '''请继续扮演"AI 助手"。基于上一条用户发言，输出**一条**自然、可执行且符合偏好的回应；避免重复模板语与空洞安慰；必要时澄清关键条件与约束。只返回下一句。'''
-
+# ===== 助手初始回复 Prompt =====
 ASSISTANT_INIT_PROMPT = ['''
 你是一位具有人格特征的一致性 AI 助手（persona_agent），你的身份是 "assistant"。
 请在自然中文口语中，结合下列信息生成第一条助理回复，既体现任务推进，也显式遵守用户偏好并主动规避冲突项。
 
-- 对话话题（topics）：''', '''
-
-- 对话目标（goal）：''', '''
-
-- 策略提示（strategy）：''', '''
-
-- 具体场景设定（background）：''', '''
+- 对话场景：''', '''
+- 场景定义：''', '''
+- 对话目标：''', '''
+- 策略提示：''', '''
+- 具体场景设定：''', '''
+- 策略调控说明：''', '''
 
 【输出风格与规则】
 - 人格一致：语气稳定、思维清晰；避免机械化模板。
 - 优先给出**可执行**的下一步（选项/提问/方案），必要时先做关键信息澄清。
 - 主动对偏好做约束传播：推荐项需可追溯至偏好与场景限制。
 - 语句简洁，无多余套话与虚词。
-'''
-                         ]
 
-CONTINUIITY_JUDGER_PROMPT = [
-    '''
-    你是对话质量审查助手。请判断以下对话是否应继续，并说明理由；同时判断是否出现**完全重复**或**含义等同**的无意义复现。
+仅输出助手的一句回复，不要任何额外解释。
+''']
 
-    【结束对话的条件（满足其一即可）】
-    - 用户的所有问题/请求均已被**充分解答**；
-    - 双方回复已无法推进对话；
-    - 助手无法再提供有意义信息；
-    （注意：不要因为"太短"而草率结束；通常应达到 5 轮以上才考虑结束。）
+# ===== 助手追问 Prompt =====
+ASSISTANT_FOLLOWUP_PROMPT = '''请继续扮演"AI 助手"。基于上一条用户发言，输出**一条**自然、可执行且符合偏好的回应；避免重复模板语与空洞安慰；必要时澄清关键条件与约束。只返回下一句。'''
 
-    【输出格式】仅输出一个对象（不要额外文本）：
-    ```json
-    {
-      "should_continue": true/false,
-      "no_repetition": true/false,
-      "reason": "简要但具体的判断依据"
-    }
-    ```
+# ===== 对话连续性判断 Prompt =====
+CONTINUIITY_JUDGER_PROMPT = ['''
+你是对话质量审查助手。请判断以下对话是否应继续，并说明理由；同时判断是否出现**完全重复**或**含义等同**的无意义复现。
 
-    【对话历史】：
-    ''',
-    '''
-    你的输出：
-    '''
-]
+【结束对话的条件（满足其一即可）】
+- 用户的所有问题/请求均已被**充分解答**；
+- 双方回复已无法推进对话；
+- 助手无法再提供有意义信息；
+（注意：不要因为"太短"而草率结束；通常应达到 5 轮以上才考虑结束。）
 
-QUESTION_JUDGER_PROMPT = [
-    '''
-    你是对话审查助手。请判断下述"用户问题"是否**明显违背**其"用户偏好"。请谨慎判定：只有在**明确矛盾**时才认为"不合理"。
+【输出格式】仅输出一个对象（不要额外文本）：
+```json
+{
+  "should_continue": true/false,
+  "no_repetition": true/false,
+  "reason": "简要但具体的判断依据"
+}
+```
 
-    【判定示例】
-    - 偏好：我只接受提供免费早餐的酒店。
-    - 问题 A：帮我找一家离展馆近的酒店，有健身房就行，**早餐要收费也可以**。→ 与偏好**明显矛盾**（不合理）
-    - 问题 B：帮我找一家离展馆近的酒店，有健身房就行，**因为房源有限，早餐收费也能接受**。→ 说明了"权衡原因"，可视为**情境性合理**
+【对话历史】：
+''', '''
 
-    【输出格式】仅输出布尔字面值（不要额外文本）：
-    - 如果 **问题合理**：输出 "True"
-    - 如果 **问题不合理**（与偏好明显矛盾）：输出 "False"
+你的输出：
+''']
 
-    现在，你需要分析的用户偏好如下：
-    ''',
-    '''
+# ===== 问题合理性判断 Prompt =====
+QUESTION_JUDGER_PROMPT = ['''
+你是对话审查助手。请判断下述"用户问题"是否**明显违背**其"用户偏好"。请谨慎判定：只有在**明确矛盾**时才认为"不合理"。
 
-    你需要分析的问题如下：
-    ''',
-    '''
+【判定示例】
+- 偏好：我只接受提供免费早餐的酒店。
+- 问题 A：帮我找一家离展馆近的酒店，有健身房就行，**早餐要收费也可以**。→ 与偏好**明显矛盾**（不合理）
+- 问题 B：帮我找一家离展馆近的酒店，有健身房就行，**因为房源有限，早餐收费也能接受**。→ 说明了"权衡原因"，可视为**情境性合理**
 
-    你的输出：
-    '''
-]
+【输出格式】仅输出布尔字面值（不要额外文本）：
+- 如果 **问题合理**：输出 "True"
+- 如果 **问题不合理**（与偏好明显矛盾）：输出 "False"
+
+现在，你需要分析的用户偏好如下：
+''', '''
+
+你需要分析的问题如下：
+''', '''
+
+你的输出：
+''']
 
 
 class promptGenerator:
@@ -250,11 +319,49 @@ class promptGenerator:
         if test:
             logger.warning("Running in test mode, prompts will only be generated once.")
 
-    def generate_single_background_prompt(self, topics, goal, strategy, theme, n) -> str:
+    def generate_scene_interpretation_prompt(self, topic, definition, theme, subtopic) -> str:
+        """生成场景解释层的prompt"""
         if not self.setup:
             raise ValueError("Please set up the prompt generator with set_test() before generating prompts.")
-        ret = PROMPT_TO_BACKGROUND[0] + topics + PROMPT_TO_BACKGROUND[1] + goal + PROMPT_TO_BACKGROUND[2] + strategy + \
-              PROMPT_TO_BACKGROUND[3] + theme + PROMPT_TO_BACKGROUND[4] + f"{n}" + PROMPT_TO_BACKGROUND[5]
+        ret = SCENE_INTERPRETATION_PROMPT[0] + topic + SCENE_INTERPRETATION_PROMPT[1] + definition + \
+              SCENE_INTERPRETATION_PROMPT[2] + theme + SCENE_INTERPRETATION_PROMPT[3] + subtopic + \
+              SCENE_INTERPRETATION_PROMPT[4]
+        return ret
+
+    def generate_strategy_adjustment_prompt(self, topic, definition, theme, subtopic,
+                                            scene_desc, key_dims, persona_name, persona_traits,
+                                            strategy_dims) -> str:
+        """生成策略调整层的prompt"""
+        if not self.setup:
+            raise ValueError("Please set up the prompt generator with set_test() before generating prompts.")
+
+        ocean_desc = json.dumps(OCEAN_CONFIG, ensure_ascii=False, indent=2)
+        behavior_desc = json.dumps(INTERACTION_TRAITS, ensure_ascii=False, indent=2)
+
+        # 格式化主要维度和次要维度
+        primary_dims = key_dims['primary']
+        primary_values = key_dims.get('primary_values', {})
+        primary_str = ", ".join([f"{dim}({primary_values.get(dim, '?')})" for dim in primary_dims])
+        secondary_str = ", ".join(key_dims['secondary'])
+
+        persona_traits_str = json.dumps(persona_traits, ensure_ascii=False)
+        strategy_dims_str = ', '.join(strategy_dims)
+
+        ret = STRATEGY_ADJUSTMENT_PROMPT[0] + ocean_desc + STRATEGY_ADJUSTMENT_PROMPT[1] + behavior_desc + \
+              STRATEGY_ADJUSTMENT_PROMPT[2] + topic + STRATEGY_ADJUSTMENT_PROMPT[3] + definition + \
+              STRATEGY_ADJUSTMENT_PROMPT[4] + theme + STRATEGY_ADJUSTMENT_PROMPT[5] + subtopic + \
+              STRATEGY_ADJUSTMENT_PROMPT[6] + scene_desc + STRATEGY_ADJUSTMENT_PROMPT[7] + primary_str + \
+              STRATEGY_ADJUSTMENT_PROMPT[8] + secondary_str + STRATEGY_ADJUSTMENT_PROMPT[9] + persona_name + \
+              STRATEGY_ADJUSTMENT_PROMPT[10] + persona_traits_str + STRATEGY_ADJUSTMENT_PROMPT[11] + \
+              strategy_dims_str + STRATEGY_ADJUSTMENT_PROMPT[12]
+        return ret
+
+    def generate_single_background_prompt(self, topics, definition, goal, strategy, theme, n) -> str:
+        if not self.setup:
+            raise ValueError("Please set up the prompt generator with set_test() before generating prompts.")
+        ret = PROMPT_TO_BACKGROUND[0] + topics + PROMPT_TO_BACKGROUND[1] + definition + \
+              PROMPT_TO_BACKGROUND[2] + goal + PROMPT_TO_BACKGROUND[3] + strategy + \
+              PROMPT_TO_BACKGROUND[4] + theme + PROMPT_TO_BACKGROUND[5] + f"{n}" + PROMPT_TO_BACKGROUND[6]
         return ret
 
     def generate_question_prompt(self, background, preference, failed_list: list[str] = []) -> str:
@@ -262,8 +369,8 @@ class promptGenerator:
             raise ValueError("Please set up the prompt generator with set_test() before generating prompts.")
         skip = f'''你不应该输出以下语句：{", ".join(failed_list)}
 ''' if failed_list != [] else ""
-        ret = PROMPT_TO_QUESTION[0] + background + PROMPT_TO_QUESTION[1] + preference + PROMPT_TO_QUESTION[2] + skip + \
-              PROMPT_TO_QUESTION[3]
+        ret = PROMPT_TO_QUESTION[0] + background + PROMPT_TO_QUESTION[1] + preference + \
+              PROMPT_TO_QUESTION[2] + skip + PROMPT_TO_QUESTION[3]
         return ret
 
     def generate_dialogue_generation_prompt(self, scenario, question) -> str:
@@ -274,29 +381,54 @@ class promptGenerator:
         return ret
 
     def generate_all_background_prompt(self):
+        """生成所有背景prompt - 每个子场景只生成其对应的2个人设"""
         if not self.setup:
             raise ValueError("Please set up the prompt generator with set_test() before generating prompts.")
         logger.warning(f"Generating background prompts: n = {self.n}, test = {self.test}")
+
         for key in tqdm(SCENE_CATEGORY, desc="Generating background prompts"):
             topics = SCENE_DATA[key]["topics"]
+            definition = SCENE_DATA[key]["definition"]
             goal = SCENE_DATA[key]["goal"]
             strategy = SCENE_DATA[key]["strategy"]
+
             for entry in tqdm(SCENE_DATA[key]["themes"], desc=f"Generating themes for {key}"):
-                theme, subtopics = entry["theme"], entry["subtopics"]
-                for subtopic in subtopics:
-                    theme_with_subtopic = f"{theme} - {subtopic}"
+                theme = entry["theme"]
+
+                # 遍历每个子场景
+                for subtopic_data in entry["subtopics"]:
+                    subtopic_name = subtopic_data["name"]
+                    persona_ids = subtopic_data["personas"]  # 该子场景对应的2个人设ID
+
+                    theme_with_subtopic = f"{theme} - {subtopic_name}"
+
                     yield {
-                        "config": {"topics": topics, "goal": goal, "strategy": strategy, "theme": theme_with_subtopic},
-                        "content": self.generate_single_background_prompt(topics, goal, strategy, theme_with_subtopic,
-                                                                          self.n)
+                        "config": {
+                            "category": key,
+                            "topics": topics,
+                            "definition": definition,
+                            "goal": goal,
+                            "strategy": strategy,
+                            "theme": theme,
+                            "subtopic_name": subtopic_name,
+                            "persona_ids": persona_ids  # 传递人设ID列表
+                        },
+                        "content": self.generate_single_background_prompt(
+                            topics, definition, goal, strategy, theme_with_subtopic, self.n
+                        )
                     }
+
                 if self.test:
                     break
+
+            if self.test:
+                break
 
     def generate_check_problem_prompt(self, question, preference) -> str:
         if not self.setup:
             raise ValueError("Please set up the prompt generator with set_test() before generating prompts.")
-        ret = QUESTION_JUDGER_PROMPT[0] + preference + QUESTION_JUDGER_PROMPT[1] + question + QUESTION_JUDGER_PROMPT[2]
+        ret = QUESTION_JUDGER_PROMPT[0] + preference + QUESTION_JUDGER_PROMPT[1] + question + \
+              QUESTION_JUDGER_PROMPT[2]
         return ret
 
 
@@ -327,12 +459,15 @@ class promptChat:
         """
         return USER_FOLLOWUP_PROMPT_CONSTRAINED[0] + question + USER_FOLLOWUP_PROMPT_CONSTRAINED[1]
 
-    def generate_assistant_init_prompt(self, topics: str, goal: str, strategy: str, background: str) -> str:
+    def generate_assistant_init_prompt(self, topics: str, definition: str, goal: str, strategy: str,
+                                       background: str, strategy_control: str) -> str:
         """
         生成助手的初始系统提示词
         """
-        ret = ASSISTANT_INIT_PROMPT[0] + topics + ASSISTANT_INIT_PROMPT[1] + goal + ASSISTANT_INIT_PROMPT[
-            2] + strategy + ASSISTANT_INIT_PROMPT[3] + background + ASSISTANT_INIT_PROMPT[4]
+        ret = ASSISTANT_INIT_PROMPT[0] + topics + ASSISTANT_INIT_PROMPT[1] + definition + \
+              ASSISTANT_INIT_PROMPT[2] + goal + ASSISTANT_INIT_PROMPT[3] + strategy + \
+              ASSISTANT_INIT_PROMPT[4] + background + ASSISTANT_INIT_PROMPT[5] + strategy_control + \
+              ASSISTANT_INIT_PROMPT[6]
         return ret
 
     def generate_assistant_followup_prompt(self) -> str:
@@ -352,5 +487,21 @@ class promptChat:
 
 if __name__ == "__main__":
     prompt_gen = promptGenerator()
-    it = (prompt_gen.generate_all_background_prompt())
-    logger.success(f"Generated {len(list(it))} prompts")
+    prompt_gen.set_test(test=True, n=2)
+
+    # 测试场景解释层
+    scene_data = SCENE_DATA["Task_Completion"]
+    theme_data = scene_data["themes"][0]
+
+    scene_prompt = prompt_gen.generate_scene_interpretation_prompt(
+        topic=scene_data["topics"],
+        definition=scene_data["definition"],
+        theme=theme_data["theme"],
+        subtopic=theme_data["subtopics"][0]["name"]
+    )
+    print("=== 场景解释层 Prompt ===")
+    print(scene_prompt[:500])
+
+    # 测试背景生成
+    it = list(prompt_gen.generate_all_background_prompt())
+    logger.success(f"Generated {len(it)} prompts")

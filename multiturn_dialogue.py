@@ -74,7 +74,7 @@ def call_llm(
     # Convert list of dicts to list of Message objects
     from dashscope.api_entities.dashscope_response import Message
     message_objs = [Message(role=m["role"], content=m["content"]) for m in messages]
-    logger.debug(f"Calling model: {model}, with messages: \n{json.dumps(message_objs, ensure_ascii=False, indent=2)}")
+    logger.debug(f"Calling model: {model}, messages count: {len(messages)}")
     for i in range(MAX_RETRY):
         try:
             with SEMAPHORE:
@@ -96,11 +96,11 @@ def call_llm(
     return _extract_content(resp)  # type: ignore
 
 
-def judge_should_continue(history: List[Dict[str, str]]) -> dict[str, bool]:
+def judge_should_continue(history: List[Dict[str, str]]) -> dict:
     """
     判断对话是否可以继续。
     :param history: 历史消息列表
-    :return: True 表示可以继续对话，False 表示对话结束
+    :return: dict with keys: should_continue, no_repetition, reason
     """
     # 生成判断 prompt
     judger_prompt = prompt_chat.generate_judger_prompt(history)
@@ -122,13 +122,13 @@ def judge_should_continue(history: List[Dict[str, str]]) -> dict[str, bool]:
             should_continue = bool(response["should_continue"])
             no_repetition = bool(response["no_repetition"])
             reason = response["reason"]
-            break
+            return {"should_continue": should_continue, "no_repetition": no_repetition, "reason": reason}
         except Exception as e:
             logger.error(f"判断对话是否继续失败: {e}, 重试 {i + 1}/{MAX_RETRY}")
             time.sleep(1)
 
-    # 解析判断结果
-    return {"should_continue": should_continue, "no_repetition": no_repetition, "reason": reason}  # type: ignore
+    # 如果所有重试都失败，返回默认值
+    return {"should_continue": False, "no_repetition": True, "reason": "判断失败，默认终止对话"}
 
 
 # --------------------------------------------------------------------------------------
@@ -145,11 +145,11 @@ def run_multi_turn_dialog(
         assistant_model: str = Generation.Models.qwen_plus,
         temperature: float = 0.7,
         enable_thinking: bool = False,
-):
+) -> tuple:
     """
     让 user_model 和 assistant_model 进行多轮对话。
     一轮 = (user → assistant)。
-    :return: 完整聊天记录（list[dict]）
+    :return: (history, early_stop, length, stop_reason, no_repetition)
     """
 
     history: List[Dict[str, str]] = [{"role": Role.USER, "content": init_user_prompt}]
@@ -159,38 +159,62 @@ def run_multi_turn_dialog(
     user_followup_msg: List[Dict[str, str]] = [{"role": Role.SYSTEM, "content": user_followup_prompt}]
     assistant_followup_msg: List[Dict[str, str]] = [{"role": Role.SYSTEM, "content": assistant_followup_prompt}]
 
-    # -------- ② 主循环 --------
+    # -------- 主循环 --------
     early_stop = False
     stop_reason = ""
-    for _ in range(turns):
+    no_repetition = True
+
+    for turn_idx in range(turns):
+        logger.info(f"开始第 {turn_idx + 1}/{turns} 轮对话")
+
         # 助理回复
-        assistant_reply = call_llm(
-            assistant_model,
-            messages=assistant_system_prompt_msg + history + assistant_followup_msg,
-            temperature=temperature,
-            enable_thinking=enable_thinking,
-        )
-        history.append({"role": Role.ASSISTANT, "content": assistant_reply})
+        try:
+            assistant_reply = call_llm(
+                assistant_model,
+                messages=assistant_system_prompt_msg + history + assistant_followup_msg,
+                temperature=temperature,
+                enable_thinking=enable_thinking,
+            )
+            history.append({"role": Role.ASSISTANT, "content": assistant_reply})
+            logger.debug(f"Assistant reply: {assistant_reply[:100]}...")
+        except Exception as e:
+            logger.error(f"助理回复失败: {e}")
+            early_stop = True
+            stop_reason = f"助理回复失败: {str(e)}"
+            break
 
         # 模拟用户追问
-        user_followup = call_llm(
-            user_model,
-            messages=user_system_prompt_msg + history + user_followup_msg,
-            temperature=temperature,
-            enable_thinking=enable_thinking,
-        )
-        history.append({"role": Role.USER, "content": user_followup})
+        try:
+            user_followup = call_llm(
+                user_model,
+                messages=user_system_prompt_msg + history + user_followup_msg,
+                temperature=temperature,
+                enable_thinking=enable_thinking,
+            )
+            history.append({"role": Role.USER, "content": user_followup})
+            logger.debug(f"User followup: {user_followup[:100]}...")
+        except Exception as e:
+            logger.error(f"用户追问失败: {e}")
+            early_stop = True
+            stop_reason = f"用户追问失败: {str(e)}"
+            break
+
+        # 判断是否应该继续
         check_result = judge_should_continue(history)
         should_continue = check_result["should_continue"]
         no_repetition = check_result["no_repetition"]
         stop_reason = check_result["reason"]
+
         if not should_continue or not no_repetition:
             if not no_repetition:
                 history.pop()  # 移除重复的用户提问
             early_stop = True
+            logger.info(f"对话提前终止: {stop_reason}")
             break
-    if early_stop:
-        logger.warning(f"对话提前终止: {stop_reason}")
+
+    if not early_stop:
+        stop_reason = "对话完成"
+
     return history, early_stop, len(history), stop_reason, no_repetition
 
 
@@ -212,48 +236,98 @@ def write_to_file(data: Dict, output_file: str = "dialogue.json"):
         logger.error(f"写入文件失败: {e}")
 
 
-def generate_dialogue_for_entry(entry: dict, user_model: str, assistant_model: str,
-                                turns: int, temperature: float, enable_thinking: bool) -> Optional[dict]:
+def generate_dialogue_for_entry(
+        entry: dict,
+        user_model: str,
+        assistant_model: str,
+        turns: int,
+        temperature: float,
+        enable_thinking: bool
+) -> Optional[dict]:
+    """为单个entry生成对话"""
     if entry["id"] in existing_ids:
-        logger.info(f"Skipping existing entry with id: {entry['id']}")
+        logger.info(f"跳过已存在的entry: {entry['id']}")
         return None
 
     config = entry["config"]
-    topics, goal, strategy = config["topics"], config["goal"], config["strategy"]
+    topics = config["topics"]
+    definition = config.get("definition", "")  # 新增：场景定义
+    goal = config["goal"]
+    strategy = config["strategy"]
 
-    for scene in entry["scene"]:
-        background, preference, question = scene["background"], scene["preference"], scene["question"]
+    for idx, scene in enumerate(entry["scene"]):
+        logger.info(f"处理entry {entry['id']} 的第 {idx + 1}/{len(entry['scene'])} 个场景")
 
-        user_system_prompt = prompt_chat.generate_user_init_prompt(background, preference)
-        user_followup_prompt = prompt_chat.generate_user_followup_prompt()
-        assistant_system_prompt = prompt_chat.generate_assistant_init_prompt(topics, goal, strategy, background)
-        assistant_followup_prompt = prompt_chat.generate_assistant_followup_prompt()
-        user_init_prompt = preference + question
+        background = scene["background"]
+        preference = scene["preference"]
+        question = scene["question"]
 
-        result, early_stop, length, stop_reason, no_repetition = run_multi_turn_dialog(
-            turns=turns,
-            init_user_prompt=user_init_prompt,
-            user_system_prompt=user_system_prompt,
-            assistant_system_prompt=assistant_system_prompt,
-            user_followup_prompt=user_followup_prompt,
-            assistant_followup_prompt=assistant_followup_prompt,
-            user_model=user_model,
-            assistant_model=assistant_model,
-            temperature=temperature,
-            enable_thinking=enable_thinking,
+        # 新增：获取策略调控说明
+        strategy_adjustment = scene.get("strategy_adjustment", {})
+        if strategy_adjustment:
+            strategy_control = "策略调控说明：\n" + "\n".join(
+                [f"- {k}: {v}" for k, v in strategy_adjustment.items()]
+            )
+        else:
+            strategy_control = ""
+
+        # 生成用户初始prompt（带核心问题约束）
+        user_system_prompt = prompt_chat.generate_user_init_prompt(background, preference, question)
+        user_followup_prompt = prompt_chat.generate_user_followup_prompt(question)
+
+        # 生成助手初始prompt（带策略调控说明）
+        assistant_system_prompt = prompt_chat.generate_assistant_init_prompt(
+            topics, definition, goal, strategy, background, strategy_control
         )
-        scene["dialogue"] = result
-        scene["early_stop"] = early_stop
-        scene["length"] = length
-        scene["stop_reason"] = stop_reason if early_stop else "对话完成"
-        scene["no_repetition"] = no_repetition
+        assistant_followup_prompt = prompt_chat.generate_assistant_followup_prompt()
+
+        # 用户第一句话（直接提出核心问题）
+        user_init_prompt = question
+
+        try:
+            result, early_stop, length, stop_reason, no_repetition = run_multi_turn_dialog(
+                turns=turns,
+                init_user_prompt=user_init_prompt,
+                user_system_prompt=user_system_prompt,
+                assistant_system_prompt=assistant_system_prompt,
+                user_followup_prompt=user_followup_prompt,
+                assistant_followup_prompt=assistant_followup_prompt,
+                user_model=user_model,
+                assistant_model=assistant_model,
+                temperature=temperature,
+                enable_thinking=enable_thinking,
+            )
+
+            scene["dialogue"] = result
+            scene["early_stop"] = early_stop
+            scene["length"] = length
+            scene["stop_reason"] = stop_reason
+            scene["no_repetition"] = no_repetition
+
+            logger.info(f"场景 {idx + 1} 对话生成完成: {length} 轮, early_stop={early_stop}")
+
+        except Exception as e:
+            logger.error(f"生成对话失败: {e}")
+            scene["dialogue"] = []
+            scene["early_stop"] = True
+            scene["length"] = 0
+            scene["stop_reason"] = f"生成失败: {str(e)}"
+            scene["no_repetition"] = False
+
     return entry
 
 
 def run_concurrent_dialogue_generation(data_path: str, output_path: str, **kwargs):
+    """并发生成对话"""
     global existing_ids
     existing_ids = get_existng_ids(output_file=output_path)
-    prompts = json.load(open(data_path, "r", encoding="utf-8"))
+
+    try:
+        with open(data_path, "r", encoding="utf-8") as f:
+            prompts = json.load(f)
+    except Exception as e:
+        logger.error(f"读取数据文件失败: {e}")
+        return
 
     results = []
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
@@ -271,10 +345,12 @@ def run_concurrent_dialogue_generation(data_path: str, output_path: str, **kwarg
             except Exception as e:
                 logger.error(f"生成失败: {e}")
 
+    logger.info(f"对话生成完成，共生成 {len(results)} 个entry")
+
 
 def main():
     parser = argparse.ArgumentParser(description="Qwen Multi-Agent Chat (DashScope)")
-    parser.add_argument("--data", type=str, default="backgrounds.json", help="背景数据文件路径")
+    parser.add_argument("--data", type=str, required=True, help="背景数据文件路径")
     parser.add_argument("--turns", type=int, default=9, help="对话轮数（user+assistant 为 1 轮）")
     parser.add_argument("--user_model", type=str, default="qwen-turbo", help="用户模型名")
     parser.add_argument("--assistant_model", type=str, default="qwen-plus", help="助理模型名")
@@ -282,6 +358,7 @@ def main():
     parser.add_argument("--temperature", type=float, default=0.7, help="生成温度（0-2）")
     parser.add_argument("--enable_thinking", action='store_true', help="是否启用思考模式（模型可以进行思考）")
     args = parser.parse_args()
+
     # 允许字符串或 Generation.Models 枚举
     user_model = (
         getattr(Generation.Models, args.user_model)
@@ -294,29 +371,39 @@ def main():
         else args.assistant_model
     )
 
+    # 创建必要的目录
     if not os.path.exists("logs"):
         os.makedirs("logs")
     if not os.path.exists("results"):
         os.makedirs("results")
     os.makedirs("results/multiturn_dialogue", exist_ok=True)
-    output_path = '''results/multiturn_dialogue/dialogue_''' + \
-                  f'''{args.user_model}_{args.assistant_model}_{args.turns}turns''' + \
-                  f'''_temperature{args.temperature}{"_thinking" if args.enable_thinking else ""}''' + \
-                  f'''_{time.strftime('%Y-%m-%d@%H:%M:%S')}.json'''
+
+    # 生成输出文件名
+    output_path = f'''results/multiturn_dialogue/dialogue_{args.user_model}_{args.assistant_model}_{args.turns}turns_temperature{args.temperature}{"_thinking" if args.enable_thinking else ""}{"_test" if args.test else ""}_{time.strftime('%Y-%m-%d_%H-%M-%S')}.json'''
+
+    # 配置日志
     logger.remove()
     logger.add(sys.stderr, level="INFO")
     logger.add(
-        f"logs/multiturn_dialogue_{time.strftime('%Y-%m-%d@%H:%M:%S')}.log",
+        f"logs/multiturn_dialogue_{time.strftime('%Y-%m-%d_%H-%M-%S')}.log",
         level="DEBUG",
         rotation="10 MB",
         retention="30 days",
         encoding="utf-8",
         enqueue=True,
     )
+
+    logger.info("=" * 60)
     logger.info("开始多轮对话生成")
-    logger.info(f"使用用户模型: {user_model}, 助理模型: {assistant_model}")
-    logger.info(f"对话轮数: {args.turns}, 温度: {args.temperature}, 启用思考模式: {args.enable_thinking}")
+    logger.info(f"数据文件: {args.data}")
+    logger.info(f"用户模型: {user_model}")
+    logger.info(f"助理模型: {assistant_model}")
+    logger.info(f"对话轮数: {args.turns}")
+    logger.info(f"温度: {args.temperature}")
+    logger.info(f"启用思考模式: {args.enable_thinking}")
+    logger.info(f"测试模式: {args.test}")
     logger.info(f"输出文件: {output_path}")
+    logger.info("=" * 60)
 
     run_concurrent_dialogue_generation(
         data_path=args.data,
@@ -327,6 +414,10 @@ def main():
         temperature=args.temperature,
         enable_thinking=args.enable_thinking,
     )
+
+    logger.info("=" * 60)
+    logger.info("多轮对话生成完成")
+    logger.info("=" * 60)
 
 
 if __name__ == "__main__":

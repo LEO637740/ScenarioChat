@@ -1,6 +1,7 @@
-# 这里是全流程生成过程，背景 -> 问题 -> 对话流水线
+# 这里是全流程生成过程，背景 -> 场景解释 -> 策略调整 -> 问题 -> 对话流水线
 
 from utils.prompt import promptGenerator  # 用于生成提示词的类
+from utils.dataset import SCENE_DATA  # 场景数据
 from utils.duplication_check import generate_data_identifier, get_existing_data, get_existng_ids  # 去重函数，加载函数
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -49,7 +50,7 @@ def build_messages(user_prompt: str, system_prompt: str = "") -> list[dict]:
 
 # 向阿里api发起请求并返回模型回答
 def call_deepseek(messages: list[dict]) -> str:
-    logger.debug(f"Calling model: {model}, with messages: {messages}")
+    logger.debug(f"Calling model: {model}, with messages count: {len(messages)}")
     payload = {
         "model": model,
         "messages": messages,
@@ -81,6 +82,84 @@ def check_question_validity(question: str, preference: str) -> bool:
             return False
 
     raise RuntimeError("检查问题有效性失败，已重试多次，但仍未成功")
+
+
+def generate_scene_interpretation(category: str, theme: str, subtopic: str) -> Optional[dict]:
+    """生成场景解释（第一阶段）"""
+    scene_data = SCENE_DATA[category]
+    prompt = generator.generate_scene_interpretation_prompt(
+        topic=scene_data["topics"],
+        definition=scene_data["definition"],
+        theme=theme,
+        subtopic=subtopic
+    )
+
+    for _ in range(MAX_RETRY):
+        try:
+            res = call_deepseek(build_messages(user_prompt=prompt))
+            res = re.sub(r"```json\n(.*?)\n```", r"\1", res, flags=re.DOTALL)
+            interpretation = json.loads(res)
+
+            if not isinstance(interpretation, dict):
+                raise ValueError("场景解释响应不是字典")
+            if "目标导向" not in interpretation or "用户心理状态" not in interpretation:
+                raise ValueError("场景解释缺少必要字段")
+
+            return interpretation
+
+        except requests.RequestException as e:
+            if e.response and e.response.status_code == 429:
+                logger.warning("API请求过于频繁，等待重试...")
+                time.sleep(random.uniform(5, 10))
+            else:
+                logger.error(f"API请求失败: {e}")
+                time.sleep(random.uniform(1, 3))
+        except Exception as e:
+            logger.warning(f"生成场景解释失败: {e}")
+            time.sleep(random.uniform(1, 5))
+
+    return None
+
+
+def generate_strategy_adjustment(category: str, theme: str, subtopic: str,
+                                 scene_desc: str, persona: dict) -> Optional[dict]:
+    """生成策略调整（第二阶段）"""
+    scene_data = SCENE_DATA[category]
+    prompt = generator.generate_strategy_adjustment_prompt(
+        topic=scene_data["topics"],
+        definition=scene_data["definition"],
+        theme=theme,
+        subtopic=subtopic,
+        scene_desc=scene_desc,
+        key_dims=scene_data["key_dimensions"],
+        persona_name=persona["name"],
+        persona_traits=persona["traits"],
+        strategy_dims=scene_data["strategy_dimensions"]
+    )
+
+    for _ in range(MAX_RETRY):
+        try:
+            res = call_deepseek(build_messages(user_prompt=prompt))
+            res = re.sub(r"```json\n(.*?)\n```", r"\1", res, flags=re.DOTALL)
+            strategy = json.loads(res)
+
+            if not isinstance(strategy, dict) or "interaction_strategy" not in strategy:
+                raise ValueError("策略调整响应格式不正确")
+
+            return strategy["interaction_strategy"]
+
+        except requests.RequestException as e:
+            if e.response and e.response.status_code == 429:
+                logger.warning("API请求过于频繁，等待重试...")
+                time.sleep(random.uniform(5, 10))
+            else:
+                logger.error(f"API请求失败: {e}")
+                time.sleep(random.uniform(1, 3))
+        except Exception as e:
+            logger.warning(f"生成策略调整失败: {e}")
+            time.sleep(random.uniform(1, 5))
+
+    return None
 
 
 def generate_questions_for_entry(entry: dict) -> Optional[dict]:
@@ -121,14 +200,56 @@ def generate_questions_for_entry(entry: dict) -> Optional[dict]:
 
 
 def generate_scene_with_questions(prompt: dict) -> Optional[dict]:
-    """生成场景及其所有问题"""
+    """生成场景及其所有问题（包含场景解释和策略调整）"""
     config, content = prompt["config"], prompt["content"]
+    category = config["category"]
+    theme = config["theme"]
+    subtopic_name = config["subtopic_name"]
+    persona_ids = config["persona_ids"]  # 该子场景对应的2个人设ID
+
     scene = None
     hash_id = generate_data_identifier(prompt, sort_keys=True, ensure_ascii=False, indent=2)
     if hash_id in existing_ids:
         logger.info(f"跳过已存在的ID: {hash_id}")
         return None
-    # 生成场景
+
+    # ===== 第一阶段：生成场景解释 =====
+    scene_interpretation = generate_scene_interpretation(category, theme, subtopic_name)
+    if not scene_interpretation:
+        logger.error(f"场景解释生成失败: {theme} - {subtopic_name}")
+        return None
+
+    scene_desc = f"目标导向：{scene_interpretation['目标导向']}；用户心理状态：{scene_interpretation['用户心理状态']}"
+
+    # ===== 第二阶段：为该子场景的2个人设生成策略调整 =====
+    scene_data = SCENE_DATA[category]
+    personas_with_strategy = []
+
+    # 获取该子场景对应的人设
+    all_personas = {p["id"]: p for p in scene_data["personas"]}
+
+    for persona_id in persona_ids:
+        if persona_id not in all_personas:
+            logger.error(f"人设ID不存在: {persona_id}")
+            continue
+
+        persona = all_personas[persona_id]
+        strategy_adjustment = generate_strategy_adjustment(
+            category, theme, subtopic_name, scene_desc, persona
+        )
+        if strategy_adjustment:
+            personas_with_strategy.append({
+                "persona": persona,
+                "strategy": strategy_adjustment
+            })
+        else:
+            logger.warning(f"策略调整生成失败: {persona['name']}")
+
+    if not personas_with_strategy:
+        logger.error(f"所有人设的策略调整都生成失败: {theme} - {subtopic_name}")
+        return None
+
+    # ===== 第三阶段：生成场景背景 =====
     for _ in range(MAX_RETRY):
         try:
             res = call_deepseek(build_messages(user_prompt=content))
@@ -159,6 +280,32 @@ def generate_scene_with_questions(prompt: dict) -> Optional[dict]:
     if not scene:
         return None
 
+    # ===== 第四阶段：为每个场景分配人设并生成问题 =====
+    # 【关键修改】顺序分配人设，确保两个人设都被使用
+    # 如果生成的场景数量是奇数，最后一个会重复使用第一个人设
+
+    logger.info(f"为 {len(scene)} 个背景场景分配 {len(personas_with_strategy)} 个人设")
+
+    for idx, entry in enumerate(scene):
+        # 顺序循环分配：0->persona0, 1->persona1, 2->persona0, 3->persona1...
+        persona_idx = idx % len(personas_with_strategy)
+        persona_strategy = personas_with_strategy[persona_idx]
+
+        entry["persona"] = persona_strategy["persona"]["name"]
+        entry["persona_id"] = persona_strategy["persona"]["id"]
+        entry["persona_traits"] = persona_strategy["persona"]["traits"]
+        entry["strategy_adjustment"] = persona_strategy["strategy"]
+
+        logger.debug(f"场景 {idx + 1} 分配人设: {entry['persona']} ({entry['persona_id']})")
+
+    # 验证人设分配是否均衡
+    persona_count = {}
+    for entry in scene:
+        persona_id = entry["persona_id"]
+        persona_count[persona_id] = persona_count.get(persona_id, 0) + 1
+
+    logger.info(f"人设分配统计: {persona_count}")
+
     # 并发生成问题
     with ThreadPoolExecutor(max_workers=min(4, MAX_WORKERS // 2)) as executor:
         futures = {executor.submit(generate_questions_for_entry, entry): entry for entry in scene}
@@ -175,6 +322,8 @@ def generate_scene_with_questions(prompt: dict) -> Optional[dict]:
     return {
         "id": hash_id,
         "config": config,
+        "scene_interpretation": scene_interpretation,
+        "personas_strategies": personas_with_strategy,
         "scene": scene
     }
 
