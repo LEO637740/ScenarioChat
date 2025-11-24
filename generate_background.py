@@ -541,11 +541,8 @@ def main():
     global model, thinking, generator, output_file, existing_ids
 
     num_from_args = args.num
-    if num_from_args != 8:
-        logger.warning(f"检测到 --num={num_from_args}。为满足8640条的需求,将强制使用 num=8。")
-        num = 8
-    else:
-        num = num_from_args
+
+    num = num_from_args
 
     test, model, thinking = args.test, args.model, args.thinking
 

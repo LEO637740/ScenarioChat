@@ -98,7 +98,8 @@ SCENE_DATA = {
         "topics": "任务执行",
         "definition": "以完成特定任务为核心，强调效率、准确性和可靠性。",
         "goal": "快速、精准执行用户下达的指令。",
-        "strategy": "精准理解：准确识别指令；风险确认：对敏感操作执行前必须再次确认；及时反馈：完成后立刻告知结果。",
+        # 【修改】 防止过度承诺，将“立刻告知结果”改为“模拟执行与反馈”
+        "strategy": "精准理解：准确识别指令；风险确认：对敏感操作执行前必须再次确认；模拟执行与反馈：对于无法真实操作的任务，模拟执行过程并反馈假设性结果（需符合逻辑，避免过度承诺实时监控等物理操作）。",
         "primary_dimensions": ["C", "O", "N"],  # 主维度
         "strategy_dimensions": ["info_density", "decision_logic", "step_size", "confirm_threshold", "explainability"],
         "dimension_topics": {
